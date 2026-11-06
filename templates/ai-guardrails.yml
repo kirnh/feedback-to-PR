@@ -4,5 +4,5 @@ on:
 
 jobs:
   guardrails:
-    # Change OWNER to the account that holds agent-harness.
-    uses: OWNER/agent-harness/.github/workflows/guardrails.yml@v1
+    # Change OWNER to the account that holds feedback-to-PR.
+    uses: OWNER/feedback-to-PR/.github/workflows/guardrails.yml@v1

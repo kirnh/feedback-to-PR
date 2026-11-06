@@ -1,4 +1,4 @@
-# agent-harness
+# feedback-to-PR
 
 Turns in-app feedback into scoped GitHub issues, and labeled issues into draft pull requests with a preview build. Portable: one engine, a small config per repo, an adapter per platform.
 

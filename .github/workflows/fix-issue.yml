@@ -10,7 +10,7 @@ on:
         required: true
         type: number
       harness_repository:
-        description: owner/name of this harness repo (defaults to <repo owner>/agent-harness)
+        description: owner/name of this harness repo (defaults to <repo owner>/feedback-to-PR)
         required: false
         type: string
         default: ""
@@ -42,7 +42,7 @@ jobs:
       - name: Check out the harness
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.harness_repository || format('{0}/agent-harness', github.repository_owner) }}
+          repository: ${{ inputs.harness_repository || format('{0}/feedback-to-PR', github.repository_owner) }}
           ref: ${{ inputs.harness_ref }}
           token: ${{ secrets.HARNESS_TOKEN || github.token }}
           path: .harness

@@ -6,10 +6,10 @@ on:
 jobs:
   fix:
     if: github.event.label.name == 'ai-fix'
-    # Change OWNER to the account that holds agent-harness.
-    uses: OWNER/agent-harness/.github/workflows/fix-issue.yml@v1
+    # Change OWNER to the account that holds feedback-to-PR.
+    uses: OWNER/feedback-to-PR/.github/workflows/fix-issue.yml@v1
     with:
       issue_number: ${{ github.event.issue.number }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # HARNESS_TOKEN: ${{ secrets.HARNESS_TOKEN }}   # only if agent-harness is private
+      # HARNESS_TOKEN: ${{ secrets.HARNESS_TOKEN }}   # only if feedback-to-PR is private
