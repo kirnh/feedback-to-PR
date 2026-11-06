@@ -1,0 +1,34 @@
+# Reusable workflow: fail agent PRs that touch protected paths.
+name: AI guardrails (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  protected-paths:
+    # Only agent branches are checked. Human PRs are unaffected.
+    if: startsWith(github.head_ref, 'ai/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare changed files with protected_paths
+        run: |
+          # Always protect the harness's own wiring, whatever the config says.
+          patterns=$(yq '.protected_paths[]' harness.config.yml; printf '%s\n' '.github/**' 'harness.config.yml')
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+          bad=0
+          while IFS= read -r file; do
+            while IFS= read -r pat; do
+              [ -z "$pat" ] && continue
+              case "$file" in
+                $pat) echo "::error file=$file::Protected path changed by an AI branch (matches $pat)"; bad=1 ;;
+              esac
+            done <<< "$patterns"
+          done < changed.txt
+          exit $bad

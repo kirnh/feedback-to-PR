@@ -1,0 +1,8 @@
+name: AI guardrails
+on:
+  pull_request:
+
+jobs:
+  guardrails:
+    # Change OWNER to the account that holds agent-harness.
+    uses: OWNER/agent-harness/.github/workflows/guardrails.yml@v1
