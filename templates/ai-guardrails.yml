@@ -5,4 +5,4 @@ on:
 jobs:
   guardrails:
     # Change OWNER to the account that holds feedback-to-PR.
-    uses: OWNER/feedback-to-PR/.github/workflows/guardrails.yml@v1
+    uses: OWNER/feedback-to-PR/.github/workflows/guardrails.yml@main

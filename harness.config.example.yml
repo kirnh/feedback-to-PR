@@ -19,9 +19,16 @@ protected_paths:
   - android/**/*.keystore
   - app.json
 
+node_version: 22
+
 agent:
-  max_turns: 25        # hard cap on agent steps per issue
-  draft_pr: true
+  # Which engine edits the code. The harness handles branch, checks and PR for all of them.
+  #   claude-code : Anthropic's agent. model e.g. claude-sonnet-5-5 (needs ANTHROPIC_API_KEY)
+  #   aider       : any provider via LiteLLM model strings (untested, see README)
+  #                 e.g. openrouter/deepseek/deepseek-chat, gpt-4o, gemini/gemini-2.0-flash
+  runner: claude-code
+  model: ""            # empty = runner default
+  max_turns: 25        # cap on agent steps (claude-code)
 
 # Issue types that skip the manual ai-fix label (phase 3). Keep empty at first.
 auto_approve:

@@ -7,9 +7,14 @@ jobs:
   fix:
     if: github.event.label.name == 'ai-fix'
     # Change OWNER to the account that holds feedback-to-PR.
-    uses: OWNER/feedback-to-PR/.github/workflows/fix-issue.yml@v1
+    uses: OWNER/feedback-to-PR/.github/workflows/fix-issue.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
     secrets:
+      # Pass the key(s) for the runner/model set in harness.config.yml.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       # HARNESS_TOKEN: ${{ secrets.HARNESS_TOKEN }}   # only if feedback-to-PR is private
