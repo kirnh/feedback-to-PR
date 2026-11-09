@@ -35,6 +35,9 @@ scripts/init.sh /path/to/app OWNER
 ```
 Then follow the printed steps. Templates track `@main` while the harness is changing; pin to a release tag once it settles.
 
+## Judgement trace
+Every fix run posts a "Judgement trace" comment on the issue and attaches `trace.json` to the run. It records the chain in order: triage (when the intake service embeds one), who approved by adding `ai-fix`, which runner and model ran with turns and cost, each check's result before vs after the change, and the resulting PR and files. It also records the harness version and a hash of the config and prompts, so a result can be tied to exactly what produced it. The trace is written even when the run fails.
+
 ## Safety rules
 - Feedback text never reaches a code-writing agent without a human label in between.
 - AI branches (`ai/*`) fail CI if they touch `protected_paths` or `.github/`.

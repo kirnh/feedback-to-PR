@@ -27,7 +27,7 @@ agent:
   #   aider       : any provider via LiteLLM model strings (untested, see README)
   #                 e.g. openrouter/deepseek/deepseek-chat, gpt-4o, gemini/gemini-2.0-flash
   runner: claude-code
-  model: ""            # empty = runner default
+  model: ""            # empty = runner default (claude-code defaults to claude-sonnet-5-5)
   max_turns: 25        # cap on agent steps (claude-code)
 
 # Issue types that skip the manual ai-fix label (phase 3). Keep empty at first.
