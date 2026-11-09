@@ -93,6 +93,11 @@ jobs:
           INSTALL_CMD: ${{ steps.cfg.outputs.install }}
         run: bash -c "$INSTALL_CMD"
 
+      # Installs can rewrite tracked files (lockfiles, generated code). The agent has
+      # not run yet, so reset tracked files: nothing the install touched can reach the PR.
+      - name: Discard install side effects
+        run: git checkout -- .
+
       - name: Prepare branch and task
         env:
           PROJECT: ${{ steps.cfg.outputs.project }}
