@@ -79,7 +79,7 @@ jq -n \
     "|---|---|",
     (if ($c[0].stage=="triage") then "| Triage | \($c[0].detail | tostring) |" else empty end),
     "| Approval | #\($ap.issue) approved by @\($ap.approved_by) (label `ai-fix`) |",
-    "| Agent | runner `\($ag.runner)`, model `\(($ag.models_used | join(",")) | if .=="" then $ag.model_requested else . end)`, outcome `\($ag.outcome)`, \($ag.turns // "?") turns, cost $\($ag.cost_usd // "n/a") |",
+    "| Agent | runner `\($ag.runner)`, model `\(($ag.models_used | join(",")) | if .=="" then $ag.model_requested else . end)`, outcome `\($ag.outcome)`, \($ag.turns // "?") turns, cost $\(if $ag.cost_usd then (($ag.cost_usd * 10000 | round) / 10000) else "n/a" end) |",
     "| Verification | " + ($v.checks | map("\(.check): \(if .baseline_exit==0 then "pass" else "fail" end) → \(if .after_exit==0 then "pass" else (if .after_exit==null then "n/a" else "fail" end) end)") | join("; ")) + " · introduced: \(if ($v.introduced_failures|length)==0 then "none" else ($v.introduced_failures|join(", ")) end) |",
     "| Result | `\($pr.outcome)`\(if $pr.pr_url then " → \($pr.pr_url)" else "" end) · \($pr.files_changed|length) file(s) |"
   ' /tmp/trace.json
