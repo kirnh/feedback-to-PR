@@ -169,3 +169,16 @@ describe("approval attempts are logged and surface as problems", () => {
     expect((await readEvents(kv)).length).toBe(60);
   });
 });
+
+describe("the payload reports what it could and could not read", () => {
+  it("lists each source, and a card says why when pull requests and runs are unreadable", async () => {
+    const res = await handleDashboard(get(await cookieAfterLogin(), "?fresh=1"), env, fakeGithub({ denyPulls: true, denyRuns: true }).fn, NOW);
+    const body = (await res!.json()) as { health: { sources: Record<string, boolean> }; items: Array<{ issue: number; detail: string }> };
+    expect(body.health.sources).toEqual({ issues: true, pulls: false, runs: false });
+    expect(body.items.find((i) => i.issue === 2)?.detail).toContain("cannot be read");
+  });
+  it("all sources are readable when permissions are present", async () => {
+    const res = await handleDashboard(get(await cookieAfterLogin(), "?fresh=1"), env, fakeGithub().fn, NOW);
+    expect(((await res!.json()) as { health: { sources: unknown } }).health.sources).toEqual({ issues: true, pulls: true, runs: true });
+  });
+});

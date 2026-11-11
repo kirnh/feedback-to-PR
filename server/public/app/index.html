@@ -160,6 +160,8 @@ summary::-webkit-details-marker{display:none}summary::after{content:"+";margin-l
     var hl = d.health, tok = hl.githubTokenDaysLeft;
     var h = '<section class="panel"><h2>System</h2><dl class="kv">';
     h += "<dt>GitHub token</dt><dd>" + (tok === null ? "expiry unknown" : tok < 0 ? '<span class="f">expired</span>' : tok + " day" + (tok === 1 ? "" : "s") + " left") + "</dd>";
+    var src = hl.sources || {};
+    h += "<dt>GitHub access</dt><dd>" + [["issues", "Issues"], ["pulls", "Pull requests"], ["runs", "Actions"]].map(function (k) { return src[k[0]] === false ? '<span class="f">' + k[1] + " \u2717</span>" : k[1] + " \u2713"; }).join(" \u00B7 ") + "</dd>";
     h += "<dt>Progress messages</dt><dd>" + (hl.progressNotifications ? "on" : "off (topic not set)") + "</dd>";
     h += "<dt>Web push key</dt><dd>" + (hl.webPushKey ? "set" : "not set") + "</dd></dl>";
     if (d.activity.length) h += '<h2 style="margin-top:6px">Recent approvals</h2><dl class="kv">' + d.activity.map(function (a) { return "<dt>" + esc(ago(a.t)) + "</dt><dd>" + esc(a.action || "") + (a.issue ? " #" + a.issue : "") + (a.repo ? " in " + esc(a.repo) : "") + "</dd>"; }).join("") + "</dl>";

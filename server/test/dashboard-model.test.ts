@@ -158,3 +158,21 @@ describe("checks with no baseline", () => {
     ]);
   });
 });
+
+describe("when the token cannot read some data", () => {
+  const noAccess = { pulls: false, runs: false };
+  it("an approved issue is not claimed to be 'starting' when runs cannot be read; it says why", () => {
+    const [i] = buildItems("o/r", [issue(3, ["ai-fix"])], [], [], new Map(), noAccess);
+    expect(i.detail).toContain("Actions: Read");
+    expect(i.detail).toContain("Pull requests: Read");
+    expect(i.detail).not.toContain("starting");
+  });
+  it("a finished run with unreadable pull requests is shown as to-review, not as 'no pull request'", () => {
+    const [i] = buildItems("o/r", [issue(3, ["ai-fix"])], [], [run(9, 3)], new Map(), { pulls: false, runs: true });
+    expect(i.stage).toBe("review");
+    expect(i.detail).toContain("Pull requests: Read");
+  });
+  it("with full access the same data still means 'finished but no PR'", () => {
+    expect(stageOf(issue(3, ["ai-fix"]), [], [run(9, 3)])).toBe("fail");
+  });
+});

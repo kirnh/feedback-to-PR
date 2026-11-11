@@ -99,6 +99,8 @@ export function buildItems(
   prs: GhPr[],
   runs: GhRun[],
   traces: Map<number, TraceSummary>,
+  /** False when the token could not read that kind of data; the cards then say so instead of guessing. */
+  access: { pulls: boolean; runs: boolean } = { pulls: true, runs: true },
 ): Item[] {
   const items: Item[] = [];
   for (const issue of issues) {
@@ -129,9 +131,13 @@ export function buildItems(
       stage = "done"; detail = "Issue closed."; at = issue.closed_at ?? at;
     } else if (labels.includes("ai-fix")) {
       if (!run) {
-        stage = "run"; detail = "Approved. The run is starting.";
+        stage = "run";
+        detail = access.runs ? "Approved. The run is starting." : "Approved, but its run cannot be read: the token needs 'Actions: Read'.";
+        if (!access.pulls) detail += " Pull requests cannot be read either: the token needs 'Pull requests: Read'.";
       } else if (run.status !== "completed") {
         stage = "run"; detail = "The agent is working.";
+      } else if (run.conclusion === "success" && !access.pulls) {
+        stage = "review"; detail = "The run finished. Its pull request cannot be shown: the token needs 'Pull requests: Read'.";
       } else if (run.conclusion === "success") {
         stage = "fail"; detail = "The run finished but opened no pull request (the agent may have made no changes).";
       } else {

@@ -35,7 +35,9 @@ const PERMISSION_HINT: Record<string, string> = {
   issues: "The token needs 'Issues: Read'.",
 };
 
-async function loadRepo(repo: string, gh: GhReader, problems: Problem[]): Promise<Item[]> {
+export interface Sources { issues: boolean; pulls: boolean; runs: boolean }
+
+async function loadRepo(repo: string, gh: GhReader, problems: Problem[]): Promise<{ items: Item[]; sources: Sources }> {
   const [triaged, approved, prs, runs] = await Promise.all([
     gh.get<GhIssue[]>(`/repos/${repo}/issues?state=all&labels=ai-triaged&per_page=30&sort=updated`),
     gh.get<GhIssue[]>(`/repos/${repo}/issues?state=all&labels=ai-fix&per_page=30&sort=updated`),
@@ -46,6 +48,8 @@ async function loadRepo(repo: string, gh: GhReader, problems: Problem[]): Promis
   const fail = (what: "issues" | "pulls" | "runs", r: Extract<typeof triaged | typeof prs | typeof runs, { ok: false }>) =>
     problems.push({ level: what === "issues" ? "error" : "warn", text: `${repo}: GitHub refused to list ${what === "runs" ? "workflow runs" : what} (${r.status}${r.message ? `: ${r.message}` : ""}). ${PERMISSION_HINT[what]}` });
 
+  for (const [what, r] of [["issues", triaged], ["issues", approved], ["pulls", prs], ["runs", runs]] as const)
+    if (!r.ok) console.log(JSON.stringify({ dashboard: "github_read_failed", repo, what, status: r.status, message: r.message }));
   if (!triaged.ok) fail("issues", triaged);
   if (!approved.ok) fail("issues", approved);
   if (!prs.ok) fail("pulls", prs);
@@ -65,7 +69,10 @@ async function loadRepo(repo: string, gh: GhReader, problems: Problem[]): Promis
     if (t) traces.set(candidates[idx].number, t);
   });
 
-  return buildItems(repo, issues, prs.ok ? prs.data : [], runs.ok ? runs.data.workflow_runs : [], traces);
+  return {
+    items: buildItems(repo, issues, prs.ok ? prs.data : [], runs.ok ? runs.data.workflow_runs : [], traces, { pulls: prs.ok, runs: runs.ok }),
+    sources: { issues: triaged.ok && approved.ok, pulls: prs.ok, runs: runs.ok },
+  };
 }
 
 export async function buildPayload(env: DashEnv, doFetch: Fetcher, nowMs: number) {
@@ -74,7 +81,8 @@ export async function buildPayload(env: DashEnv, doFetch: Fetcher, nowMs: number
   const problems: Problem[] = [];
 
   const perRepo = await Promise.all(repos.map((r) => loadRepo(r, gh, problems)));
-  const items = perRepo.flat();
+  const items = perRepo.flatMap((r) => r.items);
+  const sources: Sources = { issues: perRepo.every((r) => r.sources.issues), pulls: perRepo.every((r) => r.sources.pulls), runs: perRepo.every((r) => r.sources.runs) };
   const totals = computeTotals(items, nowMs);
 
   const events = await readEvents(env.USED);
@@ -96,6 +104,7 @@ export async function buildPayload(env: DashEnv, doFetch: Fetcher, nowMs: number
     problems,
     activity: events.filter((e: ApprovalEvent) => e.status === 200).slice(0, 8),
     health: {
+      sources,
       githubTokenDaysLeft: left,
       githubTokenExpires: gh.tokenExpiry(),
       progressNotifications: !!env.NTFY_PROGRESS_TOPIC,
