@@ -60,7 +60,7 @@ jq -n \
       {stage:"agent", runner:$runner, model_requested:$model_requested,
        models_used: (($agent.modelUsage // {}) | keys),
        outcome:$agent_outcome, turns:($agent.num_turns // null), cost_usd:($agent.total_cost_usd // null),
-       duration_ms:($agent.duration_ms // null), task_hash:$task_hash,
+       duration_ms:($agent.duration_ms // null), task_hash:(if $task_hash == "null" then null else $task_hash end),
        error:(if $error == "" then null else $error end)},
       {stage:"verification", checks:$checks, introduced_failures:[$checks[] | select(.introduced) | .check]},
       {stage:"pull_request", outcome:$outcome, pr_url:(if $pr_url=="" then null else $pr_url end),
@@ -83,7 +83,7 @@ jq -n \
     (if ($c[0].stage=="triage") then "| Triage | \($c[0].detail | tostring) |" else empty end),
     "| Approval | #\($ap.issue) approved by @\($ap.approved_by) (label `ai-fix`) |",
     "| Agent | runner `\($ag.runner)`, model `\(($ag.models_used | join(",")) | if .=="" then $ag.model_requested else . end)`, outcome `\($ag.outcome)`, \($ag.turns // "?") turns, cost $\(if $ag.cost_usd then (($ag.cost_usd * 10000 | round) / 10000) else "n/a" end)\(if $ag.error then " · why it failed: " + $ag.error else "" end) |",
-    "| Verification | " + ($v.checks | map("\(.check): \(if .baseline_exit==0 then "pass" else "fail" end) → \(if .after_exit==0 then "pass" else (if .after_exit==null then "n/a" else "fail" end) end)") | join("; ")) + " · introduced: \(if ($v.introduced_failures|length)==0 then "none" else ($v.introduced_failures|join(", ")) end) |",
+    "| Verification | " + ($v.checks | map("\(.check): \(if .baseline_exit==null then "n/a" elif .baseline_exit==0 then "pass" else "fail" end) → \(if .after_exit==0 then "pass" else (if .after_exit==null then "n/a" else "fail" end) end)") | join("; ")) + " · introduced: \(if ($v.introduced_failures|length)==0 then "none" else ($v.introduced_failures|join(", ")) end) |",
     "| Result | `\($pr.outcome)`\(if $pr.pr_url then " → \($pr.pr_url)" else "" end) · \($pr.files_changed|length) file(s) |"
   ' $T/trace.json
   echo

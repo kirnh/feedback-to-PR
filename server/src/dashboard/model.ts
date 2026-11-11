@@ -46,7 +46,7 @@ export interface TraceSummary {
   agentOutcome?: string;
   /** Why the run failed, in plain words (from the preflight or the agent's own log) */
   error?: string;
-  checks?: Array<{ name: string; beforePass: boolean; afterPass: boolean | null }>;
+  checks?: Array<{ name: string; beforePass: boolean | null; afterPass: boolean | null }>;
   introduced?: string[];
   files?: number;
   runUrl?: string;
@@ -188,7 +188,7 @@ export function summarizeTrace(t: unknown): TraceSummary | null {
   const main = models.find((m) => !/haiku/i.test(m)) ?? models[0] ?? (agent?.model_requested as string | undefined);
   const checks = Array.isArray(ver?.checks)
     ? (ver!.checks as Array<{ check: string; baseline_exit: number | null; after_exit: number | null }>).map((c) => ({
-        name: String(c.check), beforePass: c.baseline_exit === 0, afterPass: c.after_exit === null ? null : c.after_exit === 0,
+        name: String(c.check), beforePass: c.baseline_exit === null ? null : c.baseline_exit === 0, afterPass: c.after_exit === null ? null : c.after_exit === 0,
       }))
     : undefined;
 

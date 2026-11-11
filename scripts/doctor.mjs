@@ -96,8 +96,8 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
       out.push(level === "fail" ? fail(`Workflow ${name} is missing from ${branch}`, "Labeling an issue will do nothing.", fix) : warn(`Workflow ${name} is missing from ${branch}`, undefined, fix));
     }
   }
-  if (bodies["ai-fix.yml"] && !/^run-name:/m.test(bodies["ai-fix.yml"]))
-    out.push(warn("ai-fix.yml has no run-name", "The dashboard cannot link runs to issues.", "Add this line under `name: AI fix`:  run-name: AI fix #${{ github.event.issue.number }}"));
+  if (bodies["ai-fix.yml"] && !/^run-name:\s*["'][^"']*#\$\{\{[^"']*["']\s*$/m.test(bodies["ai-fix.yml"]))
+    out.push(warn("ai-fix.yml does not name its runs with the issue number", "The dashboard cannot link runs to issues. (An unquoted `#` is read by YAML as a comment, so the number is silently dropped.)", 'Under `name: AI fix` use exactly:  run-name: "AI fix #${{ github.event.issue.number }}"'));
 
   // ---- harness.config.yml -------------------------------------------------
   const cfg = file("harness.config.yml");

@@ -148,3 +148,13 @@ describe("failure reasons and older runs", () => {
     expect(summarizeTrace({ chain: [{ stage: "agent", error: "boom" }] })?.error).toBe("boom");
   });
 });
+
+describe("checks with no baseline", () => {
+  it("a missing baseline is unknown (null), not a failure", () => {
+    const s = summarizeTrace({ chain: [{ stage: "verification", checks: [{ check: "Lint", baseline_exit: null, after_exit: null }, { check: "Tests", baseline_exit: 0, after_exit: 1 }] }] })!;
+    expect(s.checks).toEqual([
+      { name: "Lint", beforePass: null, afterPass: null },
+      { name: "Tests", beforePass: true, afterPass: false },
+    ]);
+  });
+});

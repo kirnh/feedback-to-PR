@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { formatReport, runDoctor, type Result } from "../../scripts/doctor.mjs";
 
@@ -15,7 +16,7 @@ const healthy = (): World => ({
   secrets: ["ANTHROPIC_API_KEY", "APPROVAL_SIGNING_KEY", "NTFY_TOPIC", "NTFY_PROGRESS_TOPIC"],
   labels: ["bug", "ai-fix", "ai-triaged"],
   files: {
-    ".github/workflows/ai-fix.yml": "name: AI fix\nrun-name: AI fix #${{ github.event.issue.number }}\n",
+    ".github/workflows/ai-fix.yml": 'name: AI fix\nrun-name: "AI fix #${{ github.event.issue.number }}"\n',
     ".github/workflows/ai-guardrails.yml": "x", ".github/workflows/ai-approval-notify.yml": "x", ".github/workflows/ai-doctor.yml": "x",
     "harness.config.yml": CONFIG,
   },
@@ -100,7 +101,21 @@ describe("doctor", () => {
 
   it("warns when runs are not named, because the dashboard cannot link them", async () => {
     const w = healthy(); w.files[".github/workflows/ai-fix.yml"] = "name: AI fix\n";
-    expect(find(await run(w), "no run-name")?.level).toBe("warn");
+    expect(find(await run(w), "does not name its runs")?.level).toBe("warn");
+  });
+
+  it("catches the unquoted run-name that YAML silently truncates at the #", async () => {
+    const w = healthy(); w.files[".github/workflows/ai-fix.yml"] = "name: AI fix\nrun-name: AI fix #${{ github.event.issue.number }}\n";
+    const r = find(await run(w), "does not name its runs");
+    expect(r?.level).toBe("warn");
+    expect(r?.detail).toContain("comment");
+    expect(r?.fix).toContain('run-name: "AI fix #');
+  });
+
+  it("the shipped template passes its own check (it names runs with the issue number)", async () => {
+    const w = healthy();
+    w.files[".github/workflows/ai-fix.yml"] = readFileSync(new URL("../../templates/ai-fix.yml", import.meta.url), "utf8");
+    expect(find(await run(w), "does not name its runs")).toBeUndefined();
   });
 
   it("flags a missing or incomplete config", async () => {

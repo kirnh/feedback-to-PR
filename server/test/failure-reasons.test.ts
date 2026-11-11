@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -150,7 +150,17 @@ describe.runIf(haveTools)("the reason reaches the trace, the phone and the dashb
     const trace = JSON.parse(readFileSync(join(dir, "trace.json"), "utf8"));
     expect(trace.chain.find((s: { stage: string }) => s.stage === "agent").error).toBe(why);
     expect(readFileSync(join(dir, "trace.md"), "utf8")).toContain("why it failed: " + why);
+    // No baseline was taken, so the checks are not applicable (not "fail").
+    expect(readFileSync(join(dir, "trace.md"), "utf8")).toContain("Lint: n/a → n/a");
     expect(summarizeTrace(trace)?.error).toBe(why);
+  });
+
+  it("when the run failed before any task was built, the task hash is null (not the string \"null\")", async () => {
+    const dir = setup("Anthropic API check failed (HTTP 401): invalid x-api-key.");
+    rmSync(join(dir, "task.md"));
+    await sh("write-trace.sh", baseEnv, dir);
+    const agent = JSON.parse(readFileSync(join(dir, "trace.json"), "utf8")).chain.find((x: { stage: string }) => x.stage === "agent");
+    expect(agent.task_hash).toBeNull();
   });
 
   it("the phone message carries the reason instead of a generic line", async () => {
