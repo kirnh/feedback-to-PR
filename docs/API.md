@@ -54,8 +54,8 @@ curl -X POST "https://feedback-to-pr.example.workers.dev/v1/approve?t=$(...)"
 
 Format: `base64url(JSON{r,i,a,e,n}) . base64url(HMAC-SHA256(that first part, SIGNING_KEY))`. Fields: `r` owner/repo, `i` issue number, `a` `approve|reject`, `e` expiry (unix seconds), `n` random nonce of 8–64 characters. A TypeScript implementation is in `server/src/token.ts` (`sign`, `verify`) if you are minting from your own backend.
 
-### `GET /v1/push/key`, `POST /v1/push-test/send`, `POST /v1/push-test/report`
-Temporary routes for the web-push feasibility test (installed home-screen page → Worker → push service). Not part of the stable API; they will be removed or replaced when the dashboard ships. Return `503 not_configured` unless `VAPID_PRIVATE_JWK` is set. `send` validates that the subscription endpoint is a real push service, accepts `delay` 0–20 s and `badge` 0–99, and allows one send per 3 s.
+### `GET /v1/push/key`, `POST /v1/push-test/send`, `POST /v1/push-test/report`, `GET /v1/push-test/results`
+Temporary routes for the web-push feasibility test (installed home-screen page → Worker → push service). Not part of the stable API; they will be removed or replaced when the dashboard ships. `results` returns what the phone's service worker reported (push shown, tap opened the app, badge set) so nobody has to answer questions. `key` and `send` return `503 not_configured` unless `VAPID_PRIVATE_JWK` is set; the message says whether the secret is missing, empty or malformed, without revealing it. `send` validates that the subscription endpoint is a real push service, accepts `delay` 0–20 s and `badge` 0–99, and allows one send per 3 s.
 
 ## 2. Reusable workflow interfaces
 
@@ -140,7 +140,7 @@ Both must exist in the app repo (create them once).
 | Worker secret | `SIGNING_KEY` | Verifies links |
 | Worker secret | `GITHUB_TOKEN` | Fine-grained PAT, **Issues: read and write** on allowed repos only |
 | Worker secret | `NTFY_PROGRESS_TOPIC` | Optional; acknowledgements are skipped without it |
-| Worker secret | `VAPID_PRIVATE_JWK` | Push test only (`node server/scripts/gen-vapid.mjs`) |
+| Worker secret | `VAPID_PRIVATE_JWK` | Push test only. Create and store in one step with `node server/scripts/set-vapid-secret.mjs` (never goes through the clipboard) |
 | Worker var | `ALLOWED_REPOS` | Comma-separated `owner/repo` allowlist (in `wrangler.toml`) |
 | Worker var | `NTFY_SERVER` | Optional, default `https://ntfy.sh` |
 | Worker binding | `USED` (KV) | Single-use link records |

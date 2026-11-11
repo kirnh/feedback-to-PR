@@ -7,6 +7,7 @@ app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix a
 ```
 
 ## Documentation
+- [**Status (milestone 0.1)**](docs/STATUS.md): what is proven live, what is built but unproven, what is not built, known issues, next steps
 - [System design](docs/ARCHITECTURE.md): components, lifecycle, approval service, security model
 - [API and integration reference](docs/API.md): Worker endpoints, reusable workflows, config, secrets, labels
 - [Setup guide](docs/SETUP.md): connect any app repo, deploy the Worker, troubleshooting
@@ -18,9 +19,12 @@ app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix a
 | Repo config | `harness.config.yml` in the app repo | Yes |
 
 ## Status
-- [x] Phase 1: fix agent, guardrails, config, installer
-- [ ] Phase 1b: preview builds to try each PR on a phone (not started)
-- [ ] Owner dashboard as an installable web app, with its own push (push feasibility test in progress)
+- [x] Fix pipeline: labeled issue to draft PR, before/after checks, judgement trace (proven live)
+- [x] One-tap phone approval through a signed-link Worker (proven live)
+- [ ] Result and progress notifications (built, not yet run live)
+- [ ] Setup tooling: `init`, `doctor`, automated end-to-end tests (not built)
+- [ ] Owner dashboard as an installable web app with its own push (mock exists; server-side push proven, iPhone test next)
+- [ ] Preview builds to try each PR on a phone (not started)
 - [ ] Phase 2: triage Worker and feedback box (beta users only)
 - [ ] Phase 3: auto-approve safe issue types
 

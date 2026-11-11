@@ -2,7 +2,7 @@
 
 feedback-to-PR turns a labeled GitHub issue into a draft pull request, with one-tap phone approval and result notifications. It is built from three pieces that share no runtime: reusable GitHub Actions workflows (the **engine**), a small Cloudflare Worker (the **approval service**), and a per-repo config file.
 
-> Implementation status: the fix pipeline, guardrails, approval Worker, ntfy notifications and judgement trace are built. The triage service and in-app feedback box (phase 2), preview builds (1b), the owner dashboard (only `dashboard/mock.html` and a push feasibility test exist) and auto-approval (phase 3) are **not** built. Where this document describes them it says so.
+> Implementation status: "built" below means written and tested; see [STATUS.md](STATUS.md) for what has been **proven live** (the fix pipeline, judgement trace and one-tap approval) versus not yet (the result and progress notifications, guardrail blocking). The fix pipeline, guardrails, approval Worker, ntfy notifications and judgement trace are built. The triage service and in-app feedback box (phase 2), preview builds (1b), the owner dashboard (only `dashboard/mock.html` and a push feasibility test exist) and auto-approval (phase 3) are **not** built. Where this document describes them it says so.
 
 ## 1. Goals and constraints
 
@@ -94,7 +94,7 @@ Until the triage service exists, a person (or any script) creates the issue and 
 9. **Commit, force-push `ai/issue-<n>`, open or update a draft PR** whose body says `Closes #<n>`. `ai/*` branches belong to the harness, so a re-run replaces the previous attempt.
 10. **Write the judgement trace** (always, even on failure), post it as an issue comment, notify the owner, upload `trace.json` as the `trace` artifact.
 
-The job has a 30-minute timeout and `contents`, `pull-requests`, `issues` write permissions only.
+The job has a 30-minute timeout and `contents`, `pull-requests`, `issues` write permissions plus `id-token: write`. The last is a leftover from before the workflow token was passed to the agent action; whether it can be dropped is untested.
 
 ### 3.2 Runners
 
