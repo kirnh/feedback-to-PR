@@ -1,0 +1,150 @@
+<title>Integration Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: three figures. 1) the journey in stations, colored by which part builds it; 2) the before/after pipeline as a diagram; 3) build order as milestone cards with the spike called out. */
+:root{
+  --bg:#f3f5f3;--surface:#ffffff;--fg:#14201f;--muted:#5a6967;--line:#d6dddb;
+  --a:#1d5fa8;--a-bg:#e3eefb; --b:#6b46b8;--b-bg:#eee8fb; --c:#17704a;--c-bg:#e0f3e8; --have:#5a6967;--have-bg:#eceeed; --risk:#a15c07;--risk-bg:#fdf0dc;
+  --display:'Bricolage Grotesque','Segoe UI',sans-serif;--body:'Instrument Sans','Segoe UI',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2a3937;
+  --a:#7db6f2;--a-bg:#12253a;--b:#b9a2f0;--b-bg:#221a3a;--c:#6fd3a0;--c-bg:#10291e;--have:#9bacaa;--have-bg:#1d2a29;--risk:#f0b062;--risk-bg:#2d2113;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2a3937;
+  --a:#7db6f2;--a-bg:#12253a;--b:#b9a2f0;--b-bg:#221a3a;--c:#6fd3a0;--c-bg:#10291e;--have:#9bacaa;--have-bg:#1d2a29;--risk:#f0b062;--risk-bg:#2d2113;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55;
+  padding-block:40px 72px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:52px}
+h1,h2,h3{font-family:var(--display);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(28px,5vw,42px);letter-spacing:-.02em}h2{font-size:22px}h3{font-size:15.5px}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{color:var(--muted);max-width:66ch;margin-top:10px}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+code{font-family:var(--mono);font-size:12px}
+.key{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted)}
+.key span{display:inline-flex;align-items:center;gap:7px}.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.sw.a{background:var(--a)}.sw.b{background:var(--b)}.sw.c{background:var(--c)}.sw.h{background:var(--have)}
+.sw.r{background:transparent;border:2px dashed var(--risk)}
+
+/* figure 1 */
+.stations{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.st{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--have);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.st.a{border-top-color:var(--a)}.st.b{border-top-color:var(--b)}.st.c{border-top-color:var(--c)}
+.st .who{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.st p{font-size:13px;color:var(--muted)}
+.tag{align-self:flex-start;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--have-bg);color:var(--have)}
+.tag.a{background:var(--a-bg);color:var(--a)}.tag.b{background:var(--b-bg);color:var(--b)}.tag.c{background:var(--c-bg);color:var(--c)}
+
+/* figure 2 */
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px}
+svg{display:block;width:100%;min-width:760px;height:auto;color:var(--fg)}
+.n{fill:var(--surface);stroke:currentColor;stroke-opacity:.5}
+.nb{fill:var(--b-bg);stroke:var(--b)}.nh{fill:var(--have-bg);stroke:var(--have)}
+.nr{fill:var(--risk-bg);stroke:var(--risk);stroke-dasharray:5 4}
+.e{fill:none;stroke:currentColor;stroke-width:1.4}
+.t{font:600 12px var(--body);fill:currentColor}.s{font:400 11px var(--body);fill:currentColor;opacity:.78}.lb{font:500 10.5px var(--body);fill:currentColor;opacity:.85}
+.fb{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;font-size:13.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.box b{color:var(--fg);font-weight:600}
+
+/* figure 3 */
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.ms{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ms.spike{border:2px dashed var(--risk);background:var(--risk-bg)}
+.ms .id{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ms .done{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px}.ms .done b{color:var(--fg);font-weight:600}
+.dec{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.dec .box b{font-size:14px}
+.note{font-size:13.5px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;max-width:74ch}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Proposal · nothing here is built yet</div>
+  <h1>Integration Plan</h1>
+  <p class="lede">A developer installs the system once. Their testers get a Feedback section in the app. For every change that gets merged, the owner sees the feature before and after, side by side, as its own micro-release.</p>
+</header>
+
+<section>
+  <div><div class="eyebrow">Figure 1</div><h2>The journey, and who builds each part</h2></div>
+  <div class="key">
+    <span><i class="sw a"></i>A · Install</span><span><i class="sw b"></i>B · Before/after demo</span><span><i class="sw c"></i>C · Micro-release changelog</span><span><i class="sw h"></i>Already working</span>
+  </div>
+  <div class="stations">
+    <div class="st a"><span class="who">Developer, once</span><h3>Install</h3><p>One command now. Two or three clicks later. Opens a PR in their repo.</p><span class="tag a">Part A</span></div>
+    <div class="st a"><span class="who">Tester</span><h3>Feedback section</h3><p>A screen in the app with automatic context, offline queue, beta-only.</p><span class="tag a">Part A</span></div>
+    <div class="st"><span class="who">Triage AI, you</span><h3>Scope and approve</h3><p>Anonymous scoped issue, one tap to approve.</p><span class="tag">Approve works · triage not built</span></div>
+    <div class="st"><span class="who">Agent</span><h3>Builds a draft PR</h3><p>Proven live: about $0.10, 15 minutes.</p><span class="tag">Working</span></div>
+    <div class="st b"><span class="who">CI</span><h3>Before / after clip</h3><p>Same screen, both builds, one side-by-side video.</p><span class="tag b">Part B</span></div>
+    <div class="st c"><span class="who">On merge</span><h3>Micro-release</h3><p>Plain-language note plus the clip. Dashboard and in-app What's new.</p><span class="tag c">Part C</span></div>
+  </div>
+</section>
+
+<section>
+  <div><div class="eyebrow">Figure 2</div><h2>How the before/after clip is made</h2></div>
+  <div class="scroll">
+  <svg viewBox="0 0 960 320" role="img" aria-label="The main branch builds a baseline app that is cached. The pull request builds a second app. Both run the same scripted flow on one Android emulator, which records two videos. They are stitched side by side and published to the pull request, the dashboard and the micro-release.">
+    <defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+
+    <rect class="n" x="20" y="40" width="130" height="60" rx="6"/><text class="t" x="85" y="66" text-anchor="middle">main</text><text class="s" x="85" y="84" text-anchor="middle">before the change</text>
+    <rect class="n" x="190" y="40" width="170" height="60" rx="6"/><text class="t" x="275" y="66" text-anchor="middle">Baseline build</text><text class="s" x="275" y="84" text-anchor="middle">cached per main commit</text>
+    <line class="e" x1="150" y1="70" x2="188" y2="70" marker-end="url(#m)"/>
+
+    <rect class="n" x="20" y="220" width="130" height="60" rx="6"/><text class="t" x="85" y="246" text-anchor="middle">Pull request</text><text class="s" x="85" y="264" text-anchor="middle">after the change</text>
+    <rect class="n" x="190" y="220" width="170" height="60" rx="6"/><text class="t" x="275" y="246" text-anchor="middle">PR build</text><text class="s" x="275" y="264" text-anchor="middle">the only new build</text>
+    <line class="e" x1="150" y1="250" x2="188" y2="250" marker-end="url(#m)"/>
+
+    <rect class="nr" x="410" y="115" width="180" height="90" rx="6"/>
+    <text class="t" x="500" y="145" text-anchor="middle">Android emulator</text>
+    <text class="s" x="500" y="163" text-anchor="middle">same scripted flow, twice</text>
+    <text class="s" x="500" y="181" text-anchor="middle">unverified: spike S</text>
+    <path class="e" d="M360,70 H385 V145 H408" marker-end="url(#m)"/><text class="lb" x="372" y="62">baseline</text>
+    <path class="e" d="M360,250 H385 V175 H408" marker-end="url(#m)"/><text class="lb" x="372" y="274">PR</text>
+
+    <rect class="nb" x="640" y="125" width="140" height="70" rx="6"/><text class="t" x="710" y="153" text-anchor="middle">Stitch</text><text class="s" x="710" y="171" text-anchor="middle">Before | After</text>
+    <line class="e" x1="590" y1="160" x2="638" y2="160" marker-end="url(#m)"/><text class="lb" x="614" y="150" text-anchor="middle">2 videos</text>
+
+    <rect class="n" x="820" y="125" width="120" height="70" rx="6"/><text class="t" x="880" y="153" text-anchor="middle">Publish</text><text class="s" x="880" y="171" text-anchor="middle">PR · dashboard</text>
+    <line class="e" x1="780" y1="160" x2="818" y2="160" marker-end="url(#m)"/>
+    <text class="s" x="880" y="213" text-anchor="middle">and the micro-release</text>
+  </svg>
+  </div>
+  <div class="fb">
+    <div class="box"><b>The flow is written by the agent</b>It ships a small Maestro script in the PR that opens the changed screen using <code>testID</code>s or deep links. It runs on the baseline first. If it fails there, the demo is marked unavailable instead of showing a wrong clip.</div>
+    <div class="box"><b>Fallbacks, in order</b>Side-by-side clip, then screenshots, then "no visual change" with the diff summary and test evidence. Logic and test-only changes take the last path.</div>
+    <div class="box"><b>Health app: fixtures only</b>Recordings run on seeded fake data, never real data. The installer will not enable demos without an app-side demo mode.</div>
+    <div class="box"><b>iPhone later</b>iOS simulators need macOS runners at about ten times the price per minute. Android first; iPhone clips on demand.</div>
+  </div>
+  <p class="note">Dashed means unverified. I could not confirm that the emulator and the open-source Maestro runner work on plain GitHub runners, or whether private-repo release assets can host the clips. A one-to-two-day spike answers both before anything else is built on them.</p>
+</section>
+
+<section>
+  <div><div class="eyebrow">Figure 3</div><h2>Build order</h2></div>
+  <div class="plan">
+    <div class="ms"><span class="id">M1</span><h3>Dashboard on, doctor v1</h3><p class="done"><b>Done when</b> the dashboard shows real data and every failure names its cause. Includes diagnosing the failed run.</p></div>
+    <div class="ms"><span class="id">M2</span><h3>Intake and triage</h3><p class="done"><b>Done when</b> a curl call makes an anonymous triaged issue and the raw text is not on GitHub. Model is swappable.</p></div>
+    <div class="ms"><span class="id">M3</span><h3>React Native SDK and <code>init</code></h3><p class="done"><b>Done when</b> on a fresh sample app one command opens a PR; merged, the Feedback screen works and a test message becomes an issue.</p></div>
+    <div class="ms spike"><span class="id">S · SPIKE, run early</span><h3>Can CI record a clip?</h3><p class="done"><b>Done when</b> CI turns two commits into a 10 second side-by-side mp4 with no human step, and clip hosting is decided.</p></div>
+    <div class="ms"><span class="id">M4</span><h3>Demo pipeline</h3><p class="done"><b>Done when</b> a real PR shows its before/after clip on the PR and on the dashboard card.</p></div>
+    <div class="ms"><span class="id">M5</span><h3>Micro-release changelog</h3><p class="done"><b>Done when</b> a merge creates the release and testers see it under What's new in the app.</p></div>
+    <div class="ms"><span class="id">M6</span><h3>Install buttons, iPhone demos</h3><p class="done"><b>Done when</b> a second developer installs without help.</p></div>
+  </div>
+</section>
+
+<section>
+  <div><div class="eyebrow">Your call</div><h2>Decisions, with the defaults I will use</h2></div>
+  <div class="dec">
+    <div class="box"><b>1. Who is the "beta app user"?</b>Default: a developer adopting the tool, not an end tester. Tell me if you meant testers.</div>
+    <div class="box"><b>2. First platform for clips</b>Default: Android only.</div>
+    <div class="box"><b>3. Where clips live</b>Default: GitHub release assets first; Cloudflare R2 if private access fails.</div>
+    <div class="box"><b>4. Feedback entry point</b>Default: a row in the app's Settings.</div>
+    <div class="box"><b>5. Installer guinea pig</b>Default: a fresh sample app, not MediSync.</div>
+  </div>
+  <p class="note">"One click" is honest only in the third tier. The first tier is one command, the second is two or three clicks, and the third needs a hosted service with accounts and billing. I recommend the first tier now. The full detail is in <code>docs/PLAN-integration.md</code> in the repo.</p>
+</section>
+
+</div>
