@@ -1,0 +1,271 @@
+<title>Change Inbox</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one phone-width column (centered on desktop). Sticky header, stage chips that double as filters, then one card per change.
+   The card's left stripe and pill carry the stage, so the list can be scanned without reading. */
+:root{
+  --bg:#f3f5f3; --surface:#ffffff; --fg:#14201f; --muted:#5a6967; --line:#d6dddb; --accent:#14201f; --on-accent:#ffffff;
+  --need:#a15c07; --need-bg:#fdf0dc;
+  --run:#1d5fa8; --run-bg:#e3eefb;
+  --review:#6b46b8; --review-bg:#eee8fb;
+  --fail:#b3261e; --fail-bg:#fbe7e5;
+  --ok:#17704a; --ok-bg:#e0f3e8;
+  --mute:#6b7775; --mute-bg:#eceeed;
+  --display:'Bricolage Grotesque','Segoe UI',sans-serif; --body:'Instrument Sans','Segoe UI',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1514; --surface:#162120; --fg:#e8efed; --muted:#9bacaa; --line:#2a3937; --accent:#e8efed; --on-accent:#0e1514;
+  --need:#f0b062; --need-bg:#2d2113; --run:#7db6f2; --run-bg:#12253a; --review:#b9a2f0; --review-bg:#221a3a;
+  --fail:#f19a94; --fail-bg:#3a1917; --ok:#6fd3a0; --ok-bg:#10291e; --mute:#9bacaa; --mute-bg:#1d2a29; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1514; --surface:#162120; --fg:#e8efed; --muted:#9bacaa; --line:#2a3937; --accent:#e8efed; --on-accent:#0e1514;
+  --need:#f0b062; --need-bg:#2d2113; --run:#7db6f2; --run-bg:#12253a; --review:#b9a2f0; --review-bg:#221a3a;
+  --fail:#f19a94; --fail-bg:#3a1917; --ok:#6fd3a0; --ok-bg:#10291e; --mute:#9bacaa; --mute-bg:#1d2a29; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
+.col{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1,h3{font-family:var(--display);margin:0;line-height:1.2;text-wrap:balance}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--run);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:12px}
+
+/* mock banner */
+.mock{margin-top:12px;font-size:12.5px;color:var(--muted);background:var(--mute-bg);border-radius:6px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:space-between}
+.mock button{background:none;border:0;padding:6px 0;text-decoration:underline;color:var(--fg);min-height:32px}
+
+/* sticky header */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding:12px 0 10px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.top .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.top h1{font-size:22px;letter-spacing:-.01em}
+.proj{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.refresh{min-width:44px;min-height:44px;border:1px solid var(--line);background:var(--surface);border-radius:8px;display:grid;place-items:center}
+.stats{display:flex;gap:16px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.stats b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:44px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500}
+.chip .n{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;padding:1px 7px;border-radius:99px;background:var(--mute-bg);color:var(--mute)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.chip[aria-pressed="true"] .n{background:rgba(127,127,127,.28);color:inherit}
+.chip.has-need:not([aria-pressed="true"]) .n{background:var(--need-bg);color:var(--need)}
+
+/* problems strip */
+.problem{display:flex;gap:10px;align-items:flex-start;background:var(--fail-bg);color:var(--fg);border:1px solid var(--fail);border-radius:8px;padding:10px 12px;font-size:13.5px}
+.problem b{color:var(--fail)}
+.problem button{margin-left:auto;background:none;border:0;min-width:44px;min-height:44px;margin-block:-10px;margin-right:-12px;font-size:18px;color:var(--muted)}
+
+/* cards */
+.list{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--stripe,var(--line));border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;transition:opacity .2s ease,transform .2s ease}
+.card.leaving{opacity:0;transform:translateX(18px)}
+@media (prefers-reduced-motion:reduce){.card{transition:none}}
+.card.need{--stripe:var(--need)}.card.run{--stripe:var(--run)}.card.review{--stripe:var(--review)}.card.fail{--stripe:var(--fail)}.card.done{--stripe:var(--ok)}.card.rejected{--stripe:var(--mute)}
+.head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:99px;background:var(--mute-bg);color:var(--mute)}
+.pill.need{background:var(--need-bg);color:var(--need)}.pill.run{background:var(--run-bg);color:var(--run)}.pill.review{background:var(--review-bg);color:var(--review)}.pill.fail{background:var(--fail-bg);color:var(--fail)}.pill.done{background:var(--ok-bg);color:var(--ok)}
+.age{margin-left:auto;font-size:12px;color:var(--muted)}
+.card h3{font-size:16.5px}
+.num{font-family:var(--mono);font-size:12.5px;color:var(--muted);font-weight:400;margin-right:6px}
+.sum{color:var(--muted);font-size:14px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;color:var(--muted)}
+.risk{font-weight:600;color:var(--fg)}
+.risk.low{color:var(--ok)}.risk.mid{color:var(--need)}.risk.high{color:var(--fail)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--fg)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger{color:var(--fail);border-color:var(--fail)}
+.btn.grow{flex:1}
+.confirm{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--fail-bg);border-radius:8px;padding:10px 12px;font-size:13.5px}
+.confirm span{flex:1;min-width:120px}
+
+/* progress steps */
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.steps i{height:6px;border-radius:3px;background:var(--line)}
+.steps i.on{background:var(--run)}.steps i.now{background:var(--run);opacity:.5}
+.stepname{font-size:13px;display:flex;justify-content:space-between;gap:8px;color:var(--muted)}
+.stepname b{color:var(--fg);font-weight:600}
+
+/* checks table + details */
+details{border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;min-height:36px;display:flex;align-items:center;font-size:13.5px;font-weight:600;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";margin-left:auto;font-family:var(--mono);color:var(--muted)}
+details[open] summary::after{content:"–"}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+.tbl th,.tbl td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+.tbl th{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin-top:8px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.p{color:var(--ok)}.f{color:var(--fail)}
+
+.empty{border:1px dashed var(--line);border-radius:8px;padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--on-accent);padding:12px 16px;border-radius:8px;font-size:13.5px;max-width:min(92vw,520px);z-index:40;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+
+/* lock screen */
+.lock{min-height:calc(100vh - 80px);display:grid;place-items:center}
+.lockbox{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+.lockbox h1{font-size:28px}
+.lockbox label{font-size:13px;color:var(--muted)}
+.lockbox input{width:100%;min-height:48px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:0 14px;font:inherit}
+.fine{font-size:12.5px;color:var(--muted)}
+</style>
+
+<div class="col" id="app"></div>
+
+<script>
+(function () {
+  "use strict";
+  // ---- EXAMPLE DATA (mock only). Real data will come from GitHub: issues, PRs, runs and trace comments. ----
+  var SEED = [
+    { id: 3, stage: "need", title: "Add unit tests for isTimingReviewNotification", risk: ["Tests only", "low"], age: "12 min ago", testers: 1,
+      summary: "A small pure function has no tests. The agent will add one test file and change no source code." },
+    { id: 4, stage: "need", title: "Snooze button is hard to tap on small phones", risk: ["UI change", "mid"], age: "1 h ago", testers: 3,
+      summary: "Three testers say the snooze button on the alarm screen is too small to hit on compact phones. The tap target should reach 44pt." },
+    { id: 5, stage: "need", title: "Typo on the first onboarding screen", risk: ["Copy only", "low"], age: "3 h ago", testers: 1,
+      summary: "The welcome text says “recieve”. It should read “receive”." },
+    { id: 2, stage: "run", title: "Medicine list shows the wrong unit for syrups", risk: ["Logic", "high"], age: "approved 9 min ago", step: 3, elapsed: 372,
+      summary: "Syrup quantities show “tablets”. The agent is editing the unit formatter and its tests." },
+    { id: 6, stage: "review", title: "Add Marathi label for the Streaks tab", risk: ["Translation", "low"], age: "PR opened 20 min ago", pr: "#41",
+      summary: "One string added to the Marathi locale file.", model: "Sonnet 5.5", cost: "$0.12", turns: 9, approver: "you", files: "src/i18n/locales/mr.json (+1)",
+      checks: [["Lint", "f", "f"], ["Types", "f", "f"], ["Tests", "p", "p"]] },
+    { id: 7, stage: "fail", title: "Reminder time resets after an app update", risk: ["Logic", "high"], age: "40 min ago",
+      summary: "The run stopped before the agent started: the dependency install failed. Nothing was changed.", reason: "Install step failed (yarn could not resolve a package).", cost: "$0.00" },
+    { id: 1, stage: "done", title: "Add unit tests for getInstallId", risk: ["Tests only", "low"], age: "merged yesterday", summary: "Merged as PR #2. Cost $0.10, 9 turns, no new check failures." },
+    { id: 8, stage: "rejected", title: "Hide the beta banner on tablets", risk: ["UI change", "mid"], age: "2 days ago", summary: "Rejected by you. Issue closed as not planned." }
+  ];
+  var STAGES = [
+    ["need", "Needs you"], ["run", "Running"], ["review", "To review"], ["fail", "Failed"], ["done", "Shipped"], ["rejected", "Rejected"]
+  ];
+  var STEPS = ["Install", "Baseline checks", "Agent working", "Final checks", "Opening PR"];
+
+  var state, filter, confirming, timer;
+  var app = document.getElementById("app");
+
+  function reset() {
+    state = JSON.parse(JSON.stringify(SEED));
+    filter = "need"; confirming = null; problemShown = true;
+  }
+  var problemShown = true;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function count(stage) { return state.filter(function (i) { return i.stage === stage; }).length; }
+  function toast(msg) {
+    var t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg;
+    document.body.appendChild(t); setTimeout(function () { t.remove(); }, 3200);
+  }
+  function mmss(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+
+  function card(i) {
+    var label = STAGES.filter(function (s) { return s[0] === i.stage; })[0][1];
+    var h = '<article class="card ' + i.stage + '" data-id="' + i.id + '">';
+    h += '<div class="head"><span class="pill ' + i.stage + '">' + esc(label) + '</span><span class="age">' + esc(i.age) + "</span></div>";
+    h += '<h3><span class="num">#' + i.id + "</span>" + esc(i.title) + "</h3>";
+    h += '<p class="sum">' + esc(i.summary) + "</p>";
+    h += '<div class="meta"><span>Risk: <span class="risk ' + i.risk[1] + '">' + esc(i.risk[0]) + "</span></span>";
+    if (i.testers) h += "<span>Asked by " + i.testers + (i.testers > 1 ? " testers" : " tester") + "</span>";
+    if (i.model) h += "<span>" + esc(i.model) + " · " + esc(i.cost) + " · " + i.turns + " turns</span>";
+    h += "</div>";
+
+    if (i.stage === "need") {
+      if (confirming === i.id) {
+        h += '<div class="confirm" role="alert"><span>Reject #' + i.id + "? The issue will be closed.</span>" +
+          '<button class="btn danger" data-act="reject-yes" data-id="' + i.id + '">Yes, reject</button>' +
+          '<button class="btn" data-act="reject-no">Keep</button></div>';
+      } else {
+        h += '<div class="actions"><button class="btn primary grow" data-act="approve" data-id="' + i.id + '" aria-label="Approve fix for issue ' + i.id + '">Approve</button>' +
+          '<button class="btn danger grow" data-act="reject" data-id="' + i.id + '" aria-label="Reject issue ' + i.id + '">Reject</button></div>';
+      }
+      h += '<details><summary>Details</summary><dl class="kv"><dt>Triage</dt><dd>Scoped by the triage AI. Raw tester text is not stored on GitHub.</dd><dt>If approved</dt><dd>Runs about 15 minutes, roughly $0.10 to $0.30.</dd><dt>Link expires</dt><dd>24 hours after the request</dd></dl></details>';
+    }
+    if (i.stage === "run") {
+      h += '<div class="steps" aria-hidden="true">' + STEPS.map(function (_, k) { return "<i class=\"" + (k < i.step ? "on" : k === i.step ? "now" : "") + '"></i>'; }).join("") + "</div>";
+      h += '<div class="stepname"><span>Step ' + (i.step + 1) + " of 5: <b>" + STEPS[i.step] + '</b></span><span class="mono" data-elapsed="' + i.id + '">' + mmss(i.elapsed) + "</span></div>";
+      h += '<div class="actions"><a class="btn grow" href="#inbox" data-act="noop">View run</a></div>';
+    }
+    if (i.stage === "review") {
+      h += '<div class="actions"><a class="btn primary grow" href="#inbox" data-act="noop">Open PR ' + esc(i.pr) + '</a><a class="btn grow" href="#inbox" data-act="noop">Open preview</a></div>';
+      h += "<details><summary>Checks and trace</summary><table class=\"tbl\"><thead><tr><th>Check</th><th>Before</th><th>After</th></tr></thead><tbody>" +
+        i.checks.map(function (c) { return "<tr><td>" + c[0] + '</td><td class="' + c[1] + '">' + (c[1] === "p" ? "pass" : "fail") + '</td><td class="' + c[2] + '">' + (c[2] === "p" ? "pass" : "fail") + "</td></tr>"; }).join("") +
+        '</tbody></table><p class="fine" style="margin-top:6px;font-size:12.5px;color:var(--muted)">No new failures. Anything failing in both columns already fails on the base branch.</p>' +
+        '<dl class="kv"><dt>Approved by</dt><dd>' + esc(i.approver) + "</dd><dt>Files</dt><dd>" + esc(i.files) + "</dd><dt>Model</dt><dd>" + esc(i.model) + "</dd><dt>Cost</dt><dd>" + esc(i.cost) + " · " + i.turns + " turns</dd></dl></details>";
+    }
+    if (i.stage === "fail") {
+      h += '<p class="sum"><b class="f">Reason:</b> ' + esc(i.reason) + "</p>";
+      h += '<div class="actions"><a class="btn grow" href="#inbox" data-act="noop">View run</a><a class="btn grow" href="#inbox" data-act="noop">View issue</a></div>';
+    }
+    return h + "</article>";
+  }
+
+  function inbox() {
+    var spent = "$0.34", running = count("run");
+    var h = '<div class="mock"><span><b>Mock.</b> Example data. Buttons here only change this page.</span><span><button data-act="lock">See lock screen</button> · <button data-act="reset">Reset</button></span></div>';
+    h += '<header class="top"><div class="row"><div><h1>Change inbox</h1><div class="proj">MediSync · 4 testers · updated just now</div></div>' +
+      '<button class="refresh" data-act="refresh" aria-label="Refresh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button></div>' +
+      '<div class="stats"><span>Spent today <b>' + spent + "</b></span><span>Running <b>" + running + "</b> of 2 allowed</span><span>Waiting on you <b>" + count("need") + "</b></span></div>" +
+      '<div class="chips" role="group" aria-label="Filter by stage">' +
+      STAGES.map(function (s) {
+        return '<button class="chip' + (s[0] === "need" && count("need") ? " has-need" : "") + '" data-act="filter" data-stage="' + s[0] + '" aria-pressed="' + (filter === s[0]) + '">' + s[1] + ' <span class="n">' + count(s[0]) + "</span></button>";
+      }).join("") + "</div></header>";
+    if (problemShown) h += '<div class="problem" role="alert"><span><b>1 problem.</b> An approval at 04:28 failed: GitHub returned 404 (the token cannot see MediSync). <span class="mono">Fixed 04:38</span></span><button data-act="dismiss" aria-label="Dismiss">×</button></div>';
+    var items = state.filter(function (i) { return i.stage === filter; });
+    h += '<section class="list" aria-live="polite">';
+    if (!items.length) h += '<div class="empty">' + (filter === "need" ? "Nothing waiting on you. New feedback will show up here and buzz your phone." : "Nothing here yet.") + "</div>";
+    else h += items.map(card).join("");
+    return h + "</section>";
+  }
+
+  function lock() {
+    return '<div class="lock"><form class="lockbox" id="lockform"><h1>Change inbox</h1><p class="fine">MediSync · private. Enter the passphrase to continue.</p>' +
+      '<div><label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="current-password" placeholder="••••••••••"></div>' +
+      '<button class="btn primary" type="submit">Open inbox</button><p class="fine">Mock: any text opens the inbox. The real page keeps you signed in on this phone for 30 days and never shows tokens or raw tester messages.</p></form></div>';
+  }
+
+  function render() {
+    var view = location.hash === "#lock" ? "lock" : "inbox";
+    app.innerHTML = view === "lock" ? lock() : inbox();
+    if (view === "lock") {
+      document.getElementById("lockform").addEventListener("submit", function (e) { e.preventDefault(); location.hash = "#inbox"; });
+    }
+  }
+
+  function move(id, stage, extra) {
+    var i = state.filter(function (x) { return x.id === id; })[0];
+    var el = app.querySelector('.card[data-id="' + id + '"]');
+    if (el) el.classList.add("leaving");
+    setTimeout(function () {
+      Object.assign(i, { stage: stage }, extra || {}); confirming = null; render();
+    }, 220);
+  }
+
+  app.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-act]"); if (!t) return;
+    var act = t.getAttribute("data-act"), id = Number(t.getAttribute("data-id"));
+    if (act === "noop") { e.preventDefault(); toast("Mock: this would open GitHub."); return; }
+    if (act === "filter") { filter = t.getAttribute("data-stage"); confirming = null; render(); }
+    else if (act === "approve") { move(id, "run", { step: 0, elapsed: 0, age: "approved just now", summary: "Approved with one tap. The run is starting." }); toast("Approved #" + id + ". Starting now. (Mock: nothing was sent.)"); }
+    else if (act === "reject") { confirming = id; render(); }
+    else if (act === "reject-no") { confirming = null; render(); }
+    else if (act === "reject-yes") { move(id, "rejected", { age: "just now", summary: "Rejected by you. Issue closed as not planned." }); toast("Rejected #" + id + ". (Mock: nothing was sent.)"); }
+    else if (act === "refresh") { toast("Refreshed. (Mock)"); }
+    else if (act === "dismiss") { problemShown = false; render(); }
+    else if (act === "reset") { reset(); render(); toast("Demo reset."); }
+    else if (act === "lock") { location.hash = "#lock"; }
+  });
+  window.addEventListener("hashchange", render);
+
+  // Running items count up so the page feels alive; steps advance slowly in the demo.
+  timer = setInterval(function () {
+    state.forEach(function (i) {
+      if (i.stage !== "run") return;
+      i.elapsed += 1;
+      var el = app.querySelector('[data-elapsed="' + i.id + '"]'); if (el) el.textContent = mmss(i.elapsed);
+    });
+  }, 1000);
+
+  reset(); render();
+})();
+</script>

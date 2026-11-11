@@ -20,7 +20,7 @@ if [ -e "$target/harness.config.yml" ]; then
   echo "skip   harness.config.yml (exists)"
 else
   cp "$here/harness.config.example.yml" "$target/harness.config.yml"
-  echo "wrote  harness.config.yml  <- edit project, commands, areas"
+  echo "wrote  harness.config.yml  <- edit project, commands"
 fi
 
 cat <<EOF

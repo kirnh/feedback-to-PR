@@ -1,21 +1,21 @@
 # feedback-to-PR
 
-Turns in-app feedback into scoped GitHub issues, and labeled issues into draft pull requests with a preview build. Portable: one engine, a small config per repo, an adapter per platform.
+Turns labeled GitHub issues into draft pull requests, with phone approval and result notifications. Portable: one engine and a small config per repo.
 
 ```
-app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix agent -> draft PR -> CI + preview build -> you merge
+app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix agent -> draft PR -> CI -> you merge
 ```
 
 ## Layers
 | Layer | Where | Changes per repo? |
 |---|---|---|
-| Engine | `.github/workflows/`, `prompts/`, `intake/` | No |
+| Engine | `.github/workflows/`, `prompts/`, `scripts/` | No |
 | Repo config | `harness.config.yml` in the app repo | Yes |
-| App adapter | `intake/clients/<platform>` | Per platform |
 
 ## Status
 - [x] Phase 1: fix agent, guardrails, config, installer
-- [ ] Phase 1b: preview builds (see `previews/`, approach to be chosen for bare React Native)
+- [ ] Phase 1b: preview builds to try each PR on a phone (not started)
+- [ ] Owner dashboard as an installable web app, with its own push (push feasibility test in progress)
 - [ ] Phase 2: triage Worker and feedback box (beta users only)
 - [ ] Phase 3: auto-approve safe issue types
 
@@ -46,7 +46,7 @@ Two topics, both private to you (a topic name is effectively a password, so use 
 Titles read `[Project] #issue · what happened`; emoji tags mark the stage. Built from what the iPhone app was measured to support: emoji tags, `view` and `http` buttons, inline images, delayed delivery. Not used because they did not work on iPhone: markdown, replace-in-place updates, auto-clear, icons, and the `copy` button. Buttons are limited to three per message.
 
 ## Judgement trace
-Every fix run posts a "Judgement trace" comment on the issue and attaches `trace.json` to the run. It records the chain in order: triage (when the intake service embeds one), who approved by adding `ai-fix`, which runner and model ran with turns and cost, each check's result before vs after the change, and the resulting PR and files. It also records the harness version and a hash of the config and prompts, so a result can be tied to exactly what produced it. The trace is written even when the run fails.
+Every fix run posts a "Judgement trace" comment on the issue and attaches `trace.json` to the run. It records the chain in order: triage (when the triage service embeds one), who approved by adding `ai-fix`, which runner and model ran with turns and cost, each check's result before vs after the change, and the resulting PR and files. It also records the harness version and a hash of the config and prompts, so a result can be tied to exactly what produced it. The trace is written even when the run fails.
 
 ## Safety rules
 - Feedback text never reaches a code-writing agent without a human label in between.

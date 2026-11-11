@@ -1,5 +1,5 @@
-// Progress notifications sent by the Worker. iPhone findings that shape this (see the probe results):
-// plain text only (markdown is not rendered), no replace-in-place, emoji tags work, view/http buttons work.
+// Acknowledgement notification sent by the Worker. iPhone constraints that shape it:
+// plain text only (markdown is not rendered), emoji tags work, click opens the issue.
 
 export interface NtfyEnv {
   /** Topic for low-priority progress messages. If unset, acknowledgements are skipped. */
@@ -10,7 +10,7 @@ export interface NtfyEnv {
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
-export type AckAction = "approve" | "reject";
+type AckAction = "approve" | "reject";
 
 /** Build the acknowledgement message. Pure, so it is easy to test. */
 export function ackMessage(repo: string, issue: number, action: AckAction, topic: string) {

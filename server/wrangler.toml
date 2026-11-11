@@ -7,16 +7,23 @@ compatibility_date = "2026-11-01"
 [observability]
 enabled = true
 
+# Static files (the push test page, its service worker, manifest and icons) served from ./public.
+# Requests that match no file fall through to the Worker code.
+[assets]
+directory = "./public"
+
 [vars]
 # Comma-separated owner/repo list this Worker may act on.
 ALLOWED_REPOS = "kirnh/MediSync"
 
-# Single-use record for approval links. Create with: npx wrangler kv namespace create USED
-# then paste the printed id below.
+# Single-use record for approval links, and scratch space for the push test.
+# Create with: npx wrangler kv namespace create USED, then paste the printed id below.
 [[kv_namespaces]]
 binding = "USED"
 id = "781b6074f62f481a901c1b9e2ed46c91"
 
 # Secrets (set with `npx wrangler secret put <NAME>`, never committed):
-#   SIGNING_KEY   shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo
-#   GITHUB_TOKEN  fine-grained token, Issues read/write on the allowed repos
+#   SIGNING_KEY          shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo
+#   GITHUB_TOKEN         fine-grained token, Issues read/write on the allowed repos
+#   NTFY_PROGRESS_TOPIC  ntfy topic for acknowledgements (optional)
+#   VAPID_PRIVATE_JWK    web push signing key (push test only); create with: node scripts/gen-vapid.mjs

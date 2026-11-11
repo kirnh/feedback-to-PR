@@ -1,16 +1,11 @@
 # Copy to the root of a consumer repo as harness.config.yml and edit.
 project: MyApp
-platform: react-native   # react-native | web | other
 
 commands:
   install: yarn install --frozen-lockfile
   lint:    yarn lint
   types:   yarn tsc --noEmit
   test:    yarn test --ci
-
-# Areas of the codebase. The triage step uses these to label issues.
-areas:
-  - example-area
 
 # Files an AI branch (ai/*) may never change. Glob patterns.
 protected_paths:
@@ -30,13 +25,5 @@ agent:
   model: ""            # empty = runner default (claude-code defaults to claude-sonnet-5-5)
   max_turns: 25        # cap on agent steps (claude-code)
 
-# Issue types that skip the manual ai-fix label (phase 3). Keep empty at first.
-auto_approve:
-  types: []
-
 # Read by the agent before it starts.
 instructions: CLAUDE.md
-
-# Phase 2: who may send feedback.
-intake:
-  audience: beta-only
