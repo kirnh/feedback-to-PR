@@ -1,9 +1,12 @@
-# Reusable workflow: push a one-tap Approve / Reject notification to the owner's phone via ntfy.
+# Reusable workflow: send the owner a one-tap Approve / Reject request via ntfy ("needs you" topic).
 #
 # The buttons carry a signed, expiring, single-use link to the approval Worker (server/).
 # No credential is in the notification: the GitHub token lives only inside the Worker.
-# Approve -> the Worker adds the `ai-fix` label (which starts the fix run).
+# Approve -> the Worker adds the `ai-fix` label (which starts the fix run) and sends a
+#            "Approved, starting" message to the progress topic within a second.
 # Reject  -> the Worker closes the issue as not planned.
+#
+# iPhone notes (from probe results): plain text only, view/http buttons work, copy does not.
 name: Approval notification (reusable)
 
 on:
@@ -56,11 +59,11 @@ jobs:
           ref: ${{ inputs.harness_ref }}
           path: .harness
 
-      - name: Send approval notification
+      - name: Send approval request
         env:
           TOPIC: ${{ secrets.NTFY_TOPIC }}
           SIGNING_KEY: ${{ secrets.APPROVAL_SIGNING_KEY }}
-          SERVER: ${{ inputs.ntfy_server }}
+          NTFY_SERVER: ${{ inputs.ntfy_server }}
           WORKER: ${{ inputs.worker_url }}
           TTL: ${{ inputs.ttl_seconds }}
           REPO: ${{ github.repository }}
@@ -74,13 +77,11 @@ jobs:
           fi
           approve=$(bash .harness/scripts/mint-approval-link.sh "$REPO" "$ISSUE" approve "$TTL")
           reject=$(bash .harness/scripts/mint-approval-link.sh "$REPO" "$ISSUE" reject "$TTL")
-          payload=$(jq -n \
-            --arg topic "$TOPIC" --arg title "Approve fix? #$ISSUE" --arg msg "$TITLE" --arg click "$ISSUE_URL" \
-            --arg a "${WORKER%/}/v1/approve?t=$approve" --arg r "${WORKER%/}/v1/approve?t=$reject" '
-            {topic:$topic, title:$title, message:$msg, click:$click, tags:["robot"], priority:4,
-             actions:[
-               {action:"http", label:"Approve", url:$a, method:"POST", clear:true},
-               {action:"http", label:"Reject",  url:$r, method:"POST", clear:true}
-             ]}')
-          curl -sS -f -X POST -H "Content-Type: application/json" -d "$payload" "$SERVER" > /dev/null
-          echo "Notification sent for issue #$ISSUE (links valid for ${TTL}s)"
+          actions=$(jq -nc --arg a "${WORKER%/}/v1/approve?t=$approve" --arg r "${WORKER%/}/v1/approve?t=$reject" --arg i "$ISSUE_URL" '
+            [{action:"http", label:"Approve", url:$a, method:"POST", clear:true},
+             {action:"http", label:"Reject",  url:$r, method:"POST", clear:true},
+             {action:"view", label:"View issue", url:$i}]')
+          project="${REPO#*/}"
+          bash .harness/scripts/ntfy-send.sh "$TOPIC" "[$project] #$ISSUE · Approve fix?" \
+            "$(printf '%s\nLinks expire in %s hours.' "$TITLE" "$((TTL / 3600))")" "robot,question" 4 "$actions" "$ISSUE_URL"
+          echo "Approval request sent for issue #$ISSUE"

@@ -35,6 +35,16 @@ scripts/init.sh /path/to/app OWNER
 ```
 Then follow the printed steps. Templates track `@main` while the harness is changing; pin to a release tag once it settles.
 
+## Phone notifications (ntfy)
+Two topics, both private to you (a topic name is effectively a password, so use long random ones):
+
+| Topic | Secret | Carries |
+|---|---|---|
+| Needs you | `NTFY_TOPIC` | Approve or reject request (one tap), PR ready, run failed, no changes made |
+| Progress | `NTFY_PROGRESS_TOPIC` | "Approved, starting" within a second of your tap, "Done" with cost and checks |
+
+Titles read `[Project] #issue · what happened`; emoji tags mark the stage. Built from what the iPhone app was measured to support: emoji tags, `view` and `http` buttons, inline images, delayed delivery. Not used because they did not work on iPhone: markdown, replace-in-place updates, auto-clear, icons, and the `copy` button. Buttons are limited to three per message.
+
 ## Judgement trace
 Every fix run posts a "Judgement trace" comment on the issue and attaches `trace.json` to the run. It records the chain in order: triage (when the intake service embeds one), who approved by adding `ai-fix`, which runner and model ran with turns and cost, each check's result before vs after the change, and the resulting PR and files. It also records the harness version and a hash of the config and prompts, so a result can be tied to exactly what produced it. The trace is written even when the run fails.
 

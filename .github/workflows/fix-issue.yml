@@ -40,6 +40,12 @@ on:
       HARNESS_TOKEN:
         description: Only needed if the harness repo is private
         required: false
+      NTFY_TOPIC:
+        description: ntfy topic for "needs you" messages (PR ready, failures)
+        required: false
+      NTFY_PROGRESS_TOPIC:
+        description: ntfy topic for low-priority progress messages
+        required: false
 
 jobs:
   fix:
@@ -276,6 +282,21 @@ jobs:
           [ -f /tmp/changed.txt ] || : > /tmp/changed.txt
           bash .harness/scripts/write-trace.sh
           gh issue comment "$ISSUE" --body-file /tmp/trace.md || true
+
+      # Tell the owner how it went (PR ready / no changes / failed). Needs-you goes to one topic,
+      # low-priority progress to another. Skipped quietly when no topics are configured.
+      - name: Notify owner
+        if: always()
+        env:
+          TOPIC_ACT: ${{ secrets.NTFY_TOPIC }}
+          TOPIC_PRG: ${{ secrets.NTFY_PROGRESS_TOPIC }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ISSUE_URL: ${{ github.server_url }}/${{ github.repository }}/issues/${{ inputs.issue_number }}
+          MODEL: ${{ steps.cfg.outputs.model }}
+          AGENT_OUTCOME: ${{ steps.agent.outcome || steps.aider.outcome || 'skipped' }}
+        run: bash .harness/scripts/notify-result.sh
 
       - name: Attach trace to the run
         if: always()

@@ -1,6 +1,7 @@
+import { sendAck, type NtfyEnv } from "./ntfy";
 import { verify } from "./token";
 
-export interface Env {
+export interface Env extends NtfyEnv {
   /** HMAC key shared with the workflow that mints approval links */
   SIGNING_KEY: string;
   /** Fine-grained GitHub token (Issues: read/write). Never leaves this Worker. */
@@ -53,6 +54,7 @@ export async function handleApprove(
   env: Env,
   nowSec: number = Math.floor(Date.now() / 1000),
   ghFetch: GhFetch = fetch,
+  ntfyFetch: GhFetch = fetch,
 ): Promise<Response> {
   if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.");
 
@@ -94,14 +96,17 @@ export async function handleApprove(
     if (!r.ok) return fail(502, "github_error", await ghFailed("closing the issue", r));
   }
 
-  // Leave an audit note on the issue (best effort; the action itself already succeeded).
-  await gh(env, ghFetch, `/repos/${repo}/issues/${issue}/comments`, {
-    method: "POST",
-    body: JSON.stringify({
-      body: `${action === "approve" ? "Approved" : "Rejected"} with a one-tap link (link id \`${nonce.slice(0, 8)}\`).`,
-    }),
-  }).catch(() => undefined);
-
+  // The action succeeded: spend the link first, then confirm to the owner's phone and leave an
+  // audit note in parallel. Both are best effort and cannot change the outcome.
   await env.USED.put(nonce, "1", { expirationTtl: Math.max(60, exp - nowSec + 3600) });
+  await Promise.all([
+    sendAck(env, repo, issue, action, ntfyFetch),
+    gh(env, ghFetch, `/repos/${repo}/issues/${issue}/comments`, {
+      method: "POST",
+      body: JSON.stringify({
+        body: `${action === "approve" ? "Approved" : "Rejected"} with a one-tap link (link id \`${nonce.slice(0, 8)}\`).`,
+      }),
+    }).catch(() => undefined),
+  ]);
   return json(200, { ok: true, action, repo, issue });
 }

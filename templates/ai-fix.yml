@@ -17,4 +17,7 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      # Optional phone notifications (ntfy): "needs you" and low-priority progress topics.
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      NTFY_PROGRESS_TOPIC: ${{ secrets.NTFY_PROGRESS_TOPIC }}
       # HARNESS_TOKEN: ${{ secrets.HARNESS_TOKEN }}   # only if feedback-to-PR is private
