@@ -64,30 +64,12 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
   </section>
 
   <section class="card" id="q">
-    <h2>4. What happened?</h2>
-    <p class="muted">These unlock after you send a push in step 3. Tap the answer that matches; each tap saves immediately.</p>
-    <div>
-      <p><b>It arrived while the app was closed or the phone locked</b></p>
-      <div class="row"><button data-k="arrived_closed" data-v="yes">Yes</button><button data-k="arrived_closed" data-v="no">No</button></div>
-    </div>
-    <div>
-      <p><b>It showed while the app was open</b></p>
-      <div class="row"><button data-k="arrived_open" data-v="yes">Yes</button><button data-k="arrived_open" data-v="no">No</button></div>
-    </div>
-    <div>
-      <p><b>Sound or vibration</b></p>
-      <div class="row"><button data-k="sound" data-v="sound">Sound</button><button data-k="sound" data-v="vibration">Vibration</button><button data-k="sound" data-v="silent">Silent</button></div>
-    </div>
-    <div>
-      <p><b>It was visible on the Lock Screen</b></p>
-      <div class="row"><button data-k="lock_screen" data-v="yes">Yes</button><button data-k="lock_screen" data-v="no">No</button></div>
-    </div>
-    <div>
-      <p><b>A number 3 appeared on the Inbox icon after "badge 3"</b></p>
-      <div class="row"><button data-k="badge_visible" data-v="yes">Yes</button><button data-k="badge_visible" data-v="no">No</button><button id="clearBadge">Clear badge</button></div>
-    </div>
-    <p class="saved" id="saved"></p>
-    <p class="muted">Tapping a notification should open this page. That is recorded automatically.</p>
+    <h2>4. Result</h2>
+    <p class="muted">Nothing to answer. This fills in by itself. After sending, lock your phone, wait for the notification, then tap it.</p>
+    <p id="r-shown">Push received: waiting</p>
+    <p id="r-tap">Tap opened the app: waiting</p>
+    <p id="r-badge">Badge number set: waiting</p>
+    <div class="row"><button id="clearBadge">Clear badge</button></div>
   </section>
 
   <section class="card"><h2>Log</h2><div id="log"></div></section>
@@ -124,14 +106,18 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
   report("badge_api", hasBadge ? "yes" : "no");
 
   if (/[?&]from=push/.test(location.search)) {
-    report("tap_opens", "yes");
     log("Opened from a notification tap.");
     history.replaceState(null, "", "/push-test/");
   }
+  function mark(id, label, v) { if (v) { $(id).textContent = label + ": " + (v.v || v); $(id).style.color = "var(--ok)"; } }
+  function showResults() {
+    fetch("/v1/push-test/results").then(function (r) { return r.json(); }).then(function (j) {
+      mark("r-shown", "Push received", j.push_shown); mark("r-tap", "Tap opened the app", j.tap_opens); mark("r-badge", "Badge number set", j.badge_set);
+    }).catch(function () {});
+  }
+  showResults(); setInterval(showResults, 4000);
+  if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", function (e) { if (e.data && e.data.type === "push-shown") { log("Push received (app " + (e.data.visible ? "open" : "hidden") + ")."); showResults(); } });
 
-  var answerBtns = document.querySelectorAll("#q button[data-k]");
-  function setAnswersEnabled(on) { answerBtns.forEach(function (b) { b.disabled = !on; }); }
-  setAnswersEnabled(false);
   function setSendEnabled(on) { ["send10", "send0", "sendBadge"].forEach(function (id) { $(id).disabled = !on; }); }
   function refreshPerm() {
     if (!supported) { badge("b-perm", "not supported here", "bad"); return; }
@@ -189,7 +175,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
     var body = { subscription: subscription, delay: delay, title: "Approve fix? #3", body: "Test notification from Change Inbox" };
     if (badgeN) body.badge = badgeN;
     fetch("/v1/push-test/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().then(function (j) { log("send -> " + r.status + " " + JSON.stringify(j)); if (!r.ok) $("send-status").textContent = "Failed: " + (j.error && j.error.message); else setAnswersEnabled(true); }); })
+      .then(function (r) { return r.json().then(function (j) { log("send -> " + r.status + " " + JSON.stringify(j)); if (!r.ok) $("send-status").textContent = "Failed: " + (j.error && j.error.message); }); })
       .catch(function (e) { log("send error: " + e.message); });
   }
   $("send10").addEventListener("click", function () { send(10, 0, "Sending in 10 seconds. Lock your phone now."); });
@@ -197,10 +183,6 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
   $("sendBadge").addEventListener("click", function () { send(5, 3, "Sending in 5 seconds with badge 3. Go to your Home Screen."); });
   $("clearBadge").addEventListener("click", function () { if (hasBadge) navigator.clearAppBadge().catch(function () {}); log("Badge cleared."); });
 
-  document.getElementById("q").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-k]"); if (!b) return;
-    report(b.getAttribute("data-k"), b.getAttribute("data-v"));
-  });
 })();
 </script>
 </body>

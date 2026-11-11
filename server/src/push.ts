@@ -17,8 +17,7 @@ export const VAPID_SUBJECT = "https://feedback-to-pr.feedback-to-pr-server.worke
 
 /** What the test page may report. Anything else is rejected. */
 export const REPORT_KEYS = [
-  "installed", "api_support", "permission", "subscribed", "arrived_closed", "arrived_open",
-  "sound", "tap_opens", "badge_api", "badge_visible", "lock_screen", "note",
+  "installed", "api_support", "permission", "subscribed", "push_shown", "tap_opens", "badge_api", "badge_set",
 ] as const;
 
 const PUSH_HOSTS = [/(^|\.)push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/];
@@ -119,6 +118,16 @@ export async function handlePush(
     const vapid = vapidFromJwk(env.VAPID_PRIVATE_JWK);
     if (!vapid) return err(503, "not_configured", `Push is not configured: ${vapidProblem(env.VAPID_PRIVATE_JWK, Object.keys(env))}.`);
     return json(200, { publicKey: vapid.publicKey });
+  }
+
+  if (pathname === "/v1/push-test/results") {
+    if (request.method !== "GET") return err(405, "method_not_allowed", "Use GET.");
+    const out: Record<string, unknown> = {};
+    for (const k of [...REPORT_KEYS, "last_send"]) {
+      const raw = await env.USED.get(k === "last_send" ? "pt:last_send" : `pt:r:${k}`);
+      if (raw) out[k] = JSON.parse(raw);
+    }
+    return json(200, out);
   }
 
   if (pathname === "/v1/push-test/report") {

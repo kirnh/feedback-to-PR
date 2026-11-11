@@ -85,14 +85,14 @@ describe("GET /v1/push/key", () => {
 
 describe("POST /v1/push-test/report", () => {
   it("stores a known answer with a timestamp and user agent", async () => {
-    const res = await handlePush(post("/v1/push-test/report", { k: "arrived_closed", v: "yes" }), env, makeCtx(), fetch, 1_800_000_000_000);
+    const res = await handlePush(post("/v1/push-test/report", { k: "push_shown", v: "app-closed-or-hidden" }), env, makeCtx(), fetch, 1_800_000_000_000);
     expect(res!.status).toBe(200);
-    expect(JSON.parse(store.map.get("pt:r:arrived_closed")!)).toMatchObject({ v: "yes", ua: "TestPhone/1.0" });
+    expect(JSON.parse(store.map.get("pt:r:push_shown")!)).toMatchObject({ v: "app-closed-or-hidden", ua: "TestPhone/1.0" });
   });
   it.each([
     [{ k: "evil_key", v: "x" }],
-    [{ k: "note", v: "x".repeat(81) }],
-    [{ k: "note" }],
+    [{ k: "push_shown", v: "x".repeat(81) }],
+    [{ k: "push_shown" }],
     [{}],
   ])("rejects %j", async (body) => {
     expect((await handlePush(post("/v1/push-test/report", body), env, makeCtx()))!.status).toBe(400);
@@ -201,5 +201,20 @@ describe("vapidProblem explains a bad secret without revealing it", () => {
     const res = await handlePush(new Request("https://w.example/v1/push/key"), { USED: env.USED, VAPID_PRIVATE_JWK: "{oops" }, makeCtx());
     expect(res!.status).toBe(503);
     expect(JSON.stringify(await res!.json())).toContain("not valid JSON");
+  });
+});
+
+describe("GET /v1/push-test/results", () => {
+  it("returns only what the phone reported, plus the last send outcome", async () => {
+    await handlePush(post("/v1/push-test/report", { k: "push_shown", v: "app-closed-or-hidden" }), env, makeCtx());
+    await handlePush(post("/v1/push-test/report", { k: "tap_opens", v: "notification-click" }), env, makeCtx());
+    const res = await handlePush(new Request("https://w.example/v1/push-test/results"), env, makeCtx());
+    const body = (await res!.json()) as Record<string, { v: string }>;
+    expect(res!.status).toBe(200);
+    expect(Object.keys(body).sort()).toEqual(["push_shown", "tap_opens"]);
+    expect(body.push_shown.v).toBe("app-closed-or-hidden");
+  });
+  it("is GET only", async () => {
+    expect((await handlePush(post("/v1/push-test/results", {}), env, makeCtx()))!.status).toBe(405);
   });
 });
