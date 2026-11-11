@@ -8,6 +8,7 @@ app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix a
 
 ## Documentation
 - [**Status (milestone 0.1)**](docs/STATUS.md): what is proven live, what is built but unproven, what is not built, known issues, next steps
+- [**Integration plan**](docs/PLAN-integration.md): one-step install, in-app feedback section, before/after clips, micro-release changelog (proposal)
 - [System design](docs/ARCHITECTURE.md): components, lifecycle, approval service, security model
 - [API and integration reference](docs/API.md): Worker endpoints, reusable workflows, config, secrets, labels
 - [Setup guide](docs/SETUP.md): connect any app repo, deploy the Worker, troubleshooting
