@@ -9,7 +9,7 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$target/.github/workflows"
 
-for f in ai-fix ai-guardrails ai-approval-notify; do
+for f in ai-fix ai-guardrails ai-approval-notify ai-doctor; do
   dest="$target/.github/workflows/$f.yml"
   if [ -e "$dest" ]; then echo "skip   $dest (exists)"; continue; fi
   sed "s#OWNER/#$owner/#" "$here/templates/$f.yml" > "$dest"

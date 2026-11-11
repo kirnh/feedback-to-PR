@@ -92,6 +92,16 @@ jobs:
             echo "instructions=$(yq '.instructions // "CLAUDE.md"' harness.config.yml)"
           } >> "$GITHUB_OUTPUT"
 
+      # Fail fast, with the real reason, if the agent could not run at all (key, model, credit, quota).
+      # Everything after it is skipped when this fails (no install, no checks); the trace, the issue comment and the phone message still say why.
+      - name: Preflight (API key, model, credit)
+        id: preflight
+        if: steps.cfg.outputs.runner == 'claude-code'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ steps.cfg.outputs.model }}
+        run: bash .harness/scripts/preflight-anthropic.sh
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ steps.cfg.outputs.node }}
@@ -178,6 +188,13 @@ jobs:
           aider --yes-always --no-auto-commits --no-gitignore --no-check-update \
             --model "$MODEL" \
             --message-file /tmp/task.md
+
+      # The action hides the agent's error text in the job log; read it from the execution file instead.
+      - name: Explain agent failure
+        if: always() && (steps.agent.outcome == 'failure' || steps.aider.outcome == 'failure' || steps.preflight.outcome == 'failure')
+        env:
+          EXECUTION_FILE: ${{ steps.agent.outputs.execution_file }}
+        run: bash .harness/scripts/explain-agent-failure.sh
 
       # ---- Harness-owned verification, commit and PR ----------------------
       - name: Did the agent change anything?

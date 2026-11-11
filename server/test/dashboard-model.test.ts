@@ -121,3 +121,30 @@ describe("totals", () => {
     expect(t.spentUsd).toBeCloseTo(0.1, 5); // item 2 is older than 30 days
   });
 });
+
+describe("failure reasons and older runs", () => {
+  it("a failed run shows why, when the trace says so", () => {
+    const traces = new Map<number, TraceSummary>([[1, { error: "Anthropic API check failed (HTTP 400): credit balance is too low." }]]);
+    const [i] = buildItems("o/r", [issue(1, ["ai-fix"])], [], [run(9, 1, { conclusion: "failure" })], traces);
+    expect(i.stage).toBe("fail");
+    expect(i.detail).toContain("Why: Anthropic API check failed (HTTP 400)");
+  });
+  it("a failed run without a reason still reads sensibly", () => {
+    const [i] = buildItems("o/r", [issue(1, ["ai-fix"])], [], [run(9, 1, { conclusion: "failure" })], new Map());
+    expect(i.detail).not.toContain("Why:");
+  });
+  it("matches an older run named after the issue title", () => {
+    const old = run(5, 0, { display_title: "Issue 1", conclusion: "failure" });
+    const [i] = buildItems("o/r", [issue(1, ["ai-fix"])], [], [old], new Map());
+    expect(i.stage).toBe("fail");
+    expect(i.run?.id).toBe(5);
+  });
+  it("never matches a numbered run to a different issue by title", () => {
+    const other = run(6, 9, { display_title: "AI fix #9" });
+    const [i] = buildItems("o/r", [issue(1, ["ai-fix"])], [], [other], new Map());
+    expect(i.run).toBeUndefined();
+  });
+  it("reads the error out of a trace", () => {
+    expect(summarizeTrace({ chain: [{ stage: "agent", error: "boom" }] })?.error).toBe("boom");
+  });
+});

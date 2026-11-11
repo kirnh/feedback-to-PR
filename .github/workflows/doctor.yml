@@ -1,0 +1,52 @@
+# Reusable workflow: test this repo's own ANTHROPIC_API_KEY and model with one 1-token request.
+# Run by `node scripts/doctor.mjs --remote`, or by hand from the Actions tab. Changes nothing, costs a fraction of a cent.
+name: Doctor (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      harness_repository:
+        required: false
+        type: string
+        default: ""
+      harness_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the app repo
+        uses: actions/checkout@v4
+
+      - name: Check out the harness
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.harness_repository || format('{0}/feedback-to-PR', github.repository_owner) }}
+          ref: ${{ inputs.harness_ref }}
+          path: .harness
+
+      - name: Read the model from harness.config.yml
+        id: cfg
+        run: |
+          test -f harness.config.yml || { echo "::error::harness.config.yml is missing from the repo root"; exit 1; }
+          runner=$(yq '.agent.runner // "claude-code"' harness.config.yml)
+          model=$(yq '.agent.model // ""' harness.config.yml)
+          if [ "$runner" = "claude-code" ] && [ -z "$model" ]; then model="claude-sonnet-5-5"; fi
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "model=$model" >> "$GITHUB_OUTPUT"
+
+      - name: Preflight (API key, model, credit)
+        if: steps.cfg.outputs.runner == 'claude-code'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ steps.cfg.outputs.model }}
+        run: bash .harness/scripts/preflight-anthropic.sh

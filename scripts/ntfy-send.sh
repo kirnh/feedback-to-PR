@@ -9,7 +9,7 @@ set -euo pipefail
 topic="${1:?topic}"; title="${2:?title}"; message="${3:?message}"
 tags="${4:-}"; prio="${5:-3}"; actions="${6:-[]}"; click="${7:-}"
 
-payload=$(jq -n \
+payload=$(jq -nc \
   --arg topic "$topic" --arg title "$title" --arg message "$message" --arg tags "$tags" \
   --argjson prio "$prio" --argjson actions "$actions" --arg click "$click" '
   {topic:$topic, title:$title, message:$message, priority:$prio,

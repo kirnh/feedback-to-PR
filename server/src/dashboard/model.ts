@@ -44,6 +44,8 @@ export interface TraceSummary {
   cost?: number;
   turns?: number;
   agentOutcome?: string;
+  /** Why the run failed, in plain words (from the preflight or the agent's own log) */
+  error?: string;
   checks?: Array<{ name: string; beforePass: boolean; afterPass: boolean | null }>;
   introduced?: string[];
   files?: number;
@@ -105,7 +107,10 @@ export function buildItems(
     if (!labels.includes("ai-triaged") && !labels.includes("ai-fix")) continue;
 
     const pr = prs.filter((p) => issueNumberFromBranch(p.head.ref) === issue.number).sort(byNewest)[0];
-    const run = runs.filter((r) => issueNumberFromRun(r) === issue.number).sort(byNewest)[0];
+    // Runs are named `AI fix #<n>`. Older runs were named after the issue title, so fall back to that.
+    const run =
+      runs.filter((r) => issueNumberFromRun(r) === issue.number).sort(byNewest)[0] ??
+      runs.filter((r) => issueNumberFromRun(r) === null && (r.display_title ?? r.name) === issue.title).sort(byNewest)[0];
     const trace = traces.get(issue.number);
 
     let stage: Stage;
@@ -136,6 +141,8 @@ export function buildItems(
     } else {
       stage = "need"; detail = "Waiting for your approval.";
     }
+
+    if (stage === "fail" && trace?.error) detail = `${detail} Why: ${trace.error}`;
 
     items.push({
       repo, issue: issue.number, title: issue.title, url: issue.html_url, stage, stageLabel: STAGE_LABEL[stage], detail, at,
@@ -191,6 +198,7 @@ export function summarizeTrace(t: unknown): TraceSummary | null {
     cost: typeof agent?.cost_usd === "number" ? agent.cost_usd : undefined,
     turns: typeof agent?.turns === "number" ? agent.turns : undefined,
     agentOutcome: typeof agent?.outcome === "string" ? agent.outcome : undefined,
+    error: typeof agent?.error === "string" ? agent.error : undefined,
     checks,
     introduced: Array.isArray(ver?.introduced_failures) ? (ver!.introduced_failures as string[]) : undefined,
     files: Array.isArray(pr?.files_changed) ? (pr!.files_changed as unknown[]).length : undefined,

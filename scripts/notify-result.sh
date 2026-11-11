@@ -10,13 +10,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 send() { bash "$here/ntfy-send.sh" "$@" || echo "::warning::ntfy send failed"; }
 
 project="${REPO#*/}"
-trace=/tmp/trace.json
+T="${TRACE_DIR:-/tmp}"
+trace="$T/trace.json"
 get() { [ -f "$trace" ] && jq -r "$1" "$trace" 2>/dev/null; }
 
 outcome=$(get '[.chain[] | select(.stage=="pull_request")][0].outcome // empty')
 pr_url=$(get '[.chain[] | select(.stage=="pull_request")][0].pr_url // empty')
 cost=$(get '[.chain[] | select(.stage=="agent")][0].cost_usd // empty')
 turns=$(get '[.chain[] | select(.stage=="agent")][0].turns // empty')
+reason=$(get '[.chain[] | select(.stage=="agent")][0].error // empty')
+[ -z "$reason" ] && reason=$(head -c 300 "$T/failure_reason.txt" 2>/dev/null | tr -d '\r\n')
 introduced=$(get '[.chain[] | select(.stage=="verification")][0].introduced_failures | join(", ")')
 [ -z "$outcome" ] && outcome="agent_failed"
 
@@ -39,7 +42,7 @@ case "$outcome" in
     ;;
   *)
     actions=$(jq -nc --argjson a "$(view 'View run' "$RUN_URL")" --argjson b "$(view 'View issue' "$ISSUE_URL")" '[$a,$b]')
-    [ -n "$TOPIC_ACT" ] && send "$TOPIC_ACT" "[$project] #$ISSUE · Run failed" "The fix run did not finish (agent: ${AGENT_OUTCOME:-unknown}). Open the run to see where it stopped." "x,rotating_light" 5 "$actions" "$RUN_URL"
+    [ -n "$TOPIC_ACT" ] && send "$TOPIC_ACT" "[$project] #$ISSUE · Run failed" "${reason:-The fix run did not finish (agent: ${AGENT_OUTCOME:-unknown}). Open the run to see where it stopped.}" "x,rotating_light" 5 "$actions" "$RUN_URL"
     ;;
 esac
 exit 0

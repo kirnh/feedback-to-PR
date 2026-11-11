@@ -1,0 +1,9 @@
+name: AI doctor
+on: workflow_dispatch
+
+jobs:
+  doctor:
+    # Change OWNER to the account that holds feedback-to-PR.
+    uses: OWNER/feedback-to-PR/.github/workflows/doctor.yml@main
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
