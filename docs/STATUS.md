@@ -98,8 +98,21 @@ Setup and verification must not depend on the owner experimenting.
 
 The read-only dashboard (`server/src/dashboard/`, page at `/app/`), an approval event log that feeds its problems strip, the exact trace embedded in each issue comment, a run name (`AI fix #<n>`) that links runs to issues, and `set-dashboard-passphrase.mjs`. **To switch it on:** add `Pull requests: Read` and `Actions: Read` to the Worker's GitHub token, then run `node scripts/set-dashboard-passphrase.mjs` in `server/`.
 
+## 7b. M1 result (11 November, after the tag)
+
+| Goal | State |
+|---|---|
+| Every failure names its cause | **Proven live.** Issue #3 re-run: the preflight failed in seconds with `HTTP 401: invalid x-api-key`; install, checks and agent were skipped; the reason is in the issue's trace comment, in the trace JSON, in the phone message and on the dashboard card |
+| `doctor` | **Built and run against the real setup** (18 pass, 4 warnings, 0 fail before the remote check). `--remote` found the rejected API key |
+| Dashboard shows real data | **Logic verified against the real repo** (issue #3 Failed, issue #1 Rejected, no false problems). **Not yet viewed signed in**: needs the passphrase and two token permissions |
+| Safe key replacement | `scripts/set-anthropic-key.mjs`: typed hidden, tested against the API, stored only if it works |
+
+Bugs found by running it for real, now fixed and covered by tests: an unquoted `run-name` was silently cut at the `#` by YAML (runs were not linked to issues); a check that never ran was shown as `fail` instead of `n/a`.
+
+**Still needs the owner:** replace the rejected `ANTHROPIC_API_KEY`; add `Pull requests: Read` and `Actions: Read` to the Worker token; run `set-dashboard-passphrase.mjs`.
+
 ## 8. Quality gate at this milestone
 
-- 89 automated tests passed at the tag (162 now) (`cd server && npm test`); `tsc --noEmit` is clean
+- 89 automated tests passed at the tag (218 now) (`cd server && npm test`); `tsc --noEmit` is clean
 - All workflow and config YAML parses; every shell script passes `bash -n`
 - Notification payloads verified with `NTFY_DRY_RUN=1` for every outcome
