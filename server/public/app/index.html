@@ -61,6 +61,9 @@ summary::-webkit-details-marker{display:none}summary::after{content:"+";margin-l
 .lock{min-height:80vh;display:grid;place-items:center}.lockbox{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
 .lockbox label{font-size:13px;color:var(--muted)}
 .lockbox input{width:100%;min-height:48px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:0 14px;font:inherit}
+.inv{display:flex;flex-direction:column;gap:6px}
+.inv input,.inv select{width:100%;min-height:44px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:0 12px;font:inherit}
+.inv .code{font:12.5px ui-monospace,Menlo,monospace}
 .err{color:var(--fail);font-size:13.5px;min-height:20px}.fine{font-size:12.5px;color:var(--muted)}
 .loading{opacity:.6}
 </style>
@@ -72,7 +75,7 @@ summary::-webkit-details-marker{display:none}summary::after{content:"+";margin-l
   "use strict";
   var app = document.getElementById("app");
   var STAGES = [["need", "Needs you"], ["run", "Running"], ["review", "To review"], ["fail", "Failed"], ["done", "Shipped"], ["rejected", "Rejected"]];
-  var view = "loading", data = null, filter = null, loading = false, loginError = "", fetchError = "";
+  var view = "loading", data = null, filter = null, loading = false, loginError = "", fetchError = "", lastInvite = null, inviteError = "";
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function href(u) { return typeof u === "string" && u.indexOf("https://github.com/") === 0 ? esc(u) : "#"; }
@@ -165,7 +168,18 @@ summary::-webkit-details-marker{display:none}summary::after{content:"+";margin-l
     h += "<dt>Progress messages</dt><dd>" + (hl.progressNotifications ? "on" : "off (topic not set)") + "</dd>";
     h += "<dt>Web push key</dt><dd>" + (hl.webPushKey ? "set" : "not set") + "</dd></dl>";
     if (d.activity.length) h += '<h2 style="margin-top:6px">Recent approvals</h2><dl class="kv">' + d.activity.map(function (a) { return "<dt>" + esc(ago(a.t)) + "</dt><dd>" + esc(a.action || "") + (a.issue ? " #" + a.issue : "") + (a.repo ? " in " + esc(a.repo) : "") + "</dd>"; }).join("") + "</dl>";
-    return h + '<button class="btn" id="logout" style="margin-top:6px">Sign out</button></section>';
+    return h + invite(d) + '<button class="btn" id="logout" style="margin-top:10px">Sign out</button></section>';
+  }
+
+  function invite(d) {
+    if (!d.projects || !d.projects.length) return "";
+    var h = '<h2 style="margin-top:10px">Invite a tester</h2><p class="fine">Make a beta code for one person. They enter it once in the app\'s feedback section.</p><form id="inviteform" class="inv">' +
+      '<label class="fine" for="inv-p">App</label><select id="inv-p">' + d.projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + "</option>"; }).join("") + "</select>" +
+      '<label class="fine" for="inv-t">Tester name (only you see this)</label><input id="inv-t" maxlength="40" required placeholder="e.g. Asha">' +
+      '<label class="fine" for="inv-d">Valid for (days)</label><input id="inv-d" type="number" min="1" max="90" value="30">' +
+      '<button class="btn primary" type="submit">Make a code</button><p class="err" role="alert">' + esc(inviteError) + "</p>";
+    if (lastInvite) h += '<label class="fine" for="inv-code">Code for ' + esc(lastInvite.tester) + ", valid until " + esc(lastInvite.expiresAt.slice(0, 10)) + '</label><input id="inv-code" class="code" readonly value="' + esc(lastInvite.code) + '"><button class="btn" type="button" id="copycode">Copy code</button>';
+    return h + "</form>";
   }
 
   function lock() {
@@ -182,9 +196,25 @@ summary::-webkit-details-marker{display:none}summary::after{content:"+";margin-l
     var chip = e.target.closest("[data-stage]");
     if (chip) { filter = chip.getAttribute("data-stage"); store("filter", filter); render(); return; }
     if (e.target.closest("#refresh")) { load(true); return; }
+    if (e.target.closest("#copycode")) {
+      var box = document.getElementById("inv-code");
+      var done = function () { var b = document.getElementById("copycode"); if (b) b.textContent = "Copied"; };
+      if (navigator.clipboard) navigator.clipboard.writeText(box.value).then(done, function () { box.select(); });
+      else box.select();
+      return;
+    }
     if (e.target.closest("#logout")) { fetch("/v1/session/logout", { method: "POST", credentials: "same-origin" }).then(function () { data = null; view = "login"; render(); }); }
   });
   app.addEventListener("submit", function (e) {
+    if (e.target.id === "inviteform") {
+      e.preventDefault(); inviteError = "";
+      fetch("/v1/beta-codes", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ project: document.getElementById("inv-p").value, tester: document.getElementById("inv-t").value, days: Number(document.getElementById("inv-d").value) }) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j.error && j.error.message) || "Could not make a code."); return j; }); })
+        .then(function (j) { lastInvite = j; render(); })
+        .catch(function (err) { inviteError = err.message; render(); });
+      return;
+    }
     if (e.target.id !== "lockform") return; e.preventDefault();
     var pw = document.getElementById("pw").value; loginError = "";
     fetch("/v1/session", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ passphrase: pw }) })

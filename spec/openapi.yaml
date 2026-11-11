@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: feedback-to-PR intake API
+  version: 0.1.0
+  description: |
+    Beta testers send feedback from inside an app. The service rewrites it into a short, anonymous,
+    scoped GitHub issue and keeps the original text off GitHub. Authentication is a beta code that the
+    app's owner hands to each tester; it is bound to one project.
+servers:
+  - url: https://feedback-to-pr.feedback-to-pr-server.workers.dev
+paths:
+  /v1/health:
+    get:
+      summary: Liveness check
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+  /v1/feedback:
+    post:
+      summary: Send feedback
+      description: |
+        Returns immediately with an id. The message is triaged in the background; poll
+        `GET /v1/feedback/{id}` for the outcome. Send the same `Idempotency-Key` when retrying so the
+        same message is never filed twice.
+      security: [{ betaCode: [] }]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeedbackRequest" }
+            example:
+              message: The snooze button is too small to tap on my phone
+              context: { app_version: "1.48", platform: ios, os: "18.7", device: iPhone, screen: Alarms, locale: en-IN }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/FeedbackAccepted" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /v1/feedback/{id}:
+    get:
+      summary: Outcome of one piece of feedback
+      description: Only the tester who sent it can read it. The GitHub issue is not revealed to testers.
+      security: [{ betaCode: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: "^fb_[0-9a-f]{12}$" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeedbackStatus" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    betaCode:
+      type: http
+      scheme: bearer
+      description: A beta code (`f2pr_b1.<payload>.<signature>`) issued by the app owner. Bound to one project, expires, and can be revoked.
+  schemas:
+    FeedbackRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+        context:
+          type: object
+          additionalProperties: false
+          description: Collected automatically by the SDK. Each value is at most 80 characters.
+          properties:
+            app_version: { type: string }
+            platform: { type: string }
+            os: { type: string }
+            device: { type: string }
+            screen: { type: string }
+            locale: { type: string }
+    FeedbackAccepted:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, example: fb_3f9a1c0b7d42 }
+        status: { type: string, enum: [received] }
+    FeedbackStatus:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [received, triaged, duplicate, rejected, failed]
+          description: |
+            received: queued. triaged: became a new issue. duplicate: matched an existing report.
+            rejected: not actionable (spam, empty, abusive). failed: could not be processed; the owner is notified on the dashboard.
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: expired }
+            message: { type: string }
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

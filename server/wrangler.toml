@@ -16,6 +16,13 @@ directory = "./public"
 # Comma-separated owner/repo list this Worker may act on.
 ALLOWED_REPOS = "kirnh/MediSync"
 
+# Apps that can receive feedback: project id -> repo and display name (feedback is filed as issues there).
+PROJECTS = '{"medisync":{"repo":"kirnh/MediSync","name":"MediSync"}}'
+
+# Which model rewrites feedback into issues. Any provider: "anthropic" (default) or "openai-compatible" (+ TRIAGE_BASE_URL).
+TRIAGE_PROVIDER = "anthropic"
+TRIAGE_MODEL = "claude-haiku-5-5"
+
 # Single-use record for approval links, and scratch space for the push test.
 # Create with: npx wrangler kv namespace create USED, then paste the printed id below.
 [[kv_namespaces]]
@@ -26,4 +33,5 @@ id = "781b6074f62f481a901c1b9e2ed46c91"
 #   SIGNING_KEY          shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo
 #   GITHUB_TOKEN         fine-grained token, Issues read/write on the allowed repos
 #   NTFY_PROGRESS_TOPIC  ntfy topic for acknowledgements (optional)
+#   TRIAGE_LLM_KEY       API key for the triage model; set with: node scripts/set-triage-key.mjs
 #   VAPID_PRIVATE_JWK    web push signing key (push test only); create and store with: node scripts/set-vapid-secret.mjs

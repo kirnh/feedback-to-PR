@@ -41,3 +41,30 @@ export async function readEvents(kv: Kv): Promise<ApprovalEvent[]> {
 
 /** Statuses worth the owner's attention. 405 (scanner), 409 (duplicate tap) and 410 (expired) are routine. */
 export const isProblem = (e: ApprovalEvent) => e.status >= 500 || e.status === 401 || e.status === 403;
+
+export interface FeedbackFailure {
+  t: string;
+  id: string;
+  project: string;
+  /** Short machine-readable reason, e.g. github_read_403, triage_not_configured */
+  failure: string;
+}
+
+const FB_KEY = "evt:feedback-failures";
+
+export async function recordFeedbackFailure(kv: Kv, f: FeedbackFailure): Promise<void> {
+  try {
+    const cur = JSON.parse((await kv.get(FB_KEY)) ?? "[]") as FeedbackFailure[];
+    await kv.put(FB_KEY, JSON.stringify([f, ...cur].slice(0, 30)), { expirationTtl: 30 * 86_400 });
+  } catch {
+    /* logging must never break intake */
+  }
+}
+
+export async function readFeedbackFailures(kv: Kv): Promise<FeedbackFailure[]> {
+  try {
+    return JSON.parse((await kv.get(FB_KEY)) ?? "[]") as FeedbackFailure[];
+  } catch {
+    return [];
+  }
+}

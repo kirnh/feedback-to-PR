@@ -138,6 +138,7 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
           ["GITHUB_TOKEN", "fail", "The Worker cannot act on issues.", "cd server && npx wrangler secret put GITHUB_TOKEN"],
           ["DASHBOARD_PASS", "warn", "The dashboard cannot be signed into.", "cd server && node scripts/set-dashboard-passphrase.mjs"],
           ["NTFY_PROGRESS_TOPIC", "warn", "'Approved, starting' acknowledgements are skipped.", "cd server && npx wrangler secret put NTFY_PROGRESS_TOPIC"],
+          ["TRIAGE_LLM_KEY", "warn", "Feedback from the app cannot be turned into issues.", "cd server && node scripts/set-triage-key.mjs"],
         ]) have.includes(n) ? out.push(pass(`Worker secret ${n} is set`)) : out.push(level === "fail" ? fail(`Worker secret ${n} is missing`, why, fix) : warn(`Worker secret ${n} is missing`, why, fix));
       }
 

@@ -121,6 +121,12 @@ Add repo secrets: `NTFY_TOPIC` (needs-you topic), `NTFY_PROGRESS_TOPIC`, and `AP
 2. Choose a passphrase: `cd server && node scripts/set-dashboard-passphrase.mjs`. You type it twice (hidden); only a salted hash is stored, and the script signs in once to prove it works.
 3. Open `https://<worker>/app/`. In each app repo's `ai-fix.yml`, the run must be named `AI fix #<issue number>` (`run-name: "AI fix #${{ github.event.issue.number }}"`, already in the template; the quotes matter, because YAML reads an unquoted ` #` as the start of a comment) so the dashboard can link runs to issues.
 
+### C6. Feedback intake (optional)
+1. List the app in `PROJECTS` and `ALLOWED_REPOS` in `server/wrangler.toml`, then `cd server && npx wrangler deploy`.
+2. Store the triage model's API key: `cd server && node scripts/set-triage-key.mjs` (typed hidden; tested before it is stored). The model and provider are settings in `wrangler.toml`; a cheap model is the default.
+3. On the dashboard, use **Invite a tester** to make a beta code for each person. They enter it once in the app's feedback section.
+4. Check the whole path: `node scripts/send-test-feedback.mjs` (paste a code when asked). It sends one message, waits for triage, and reports the result. It creates a real `ai-triaged` issue, so your phone shows the approval request; close the issue afterwards.
+
 ## Adding more apps
 For each additional app: run `init.sh`, edit its config, add its secrets, labels and branch protection (part B), add its `owner/repo` to `ALLOWED_REPOS` and give the Worker's GitHub token access to it, then `npx wrangler deploy` (part C). The Worker and topics are shared. If you want per-app topics, use separate `NTFY_TOPIC` secrets per repo; the Worker's progress topic is global.
 

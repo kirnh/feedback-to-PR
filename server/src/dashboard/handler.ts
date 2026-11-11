@@ -1,5 +1,7 @@
 import { checkPassphrase, hasValidSession, loginAllowed, makeSession, recordLoginFailure, setCookie } from "./auth";
-import { isProblem, readEvents, type ApprovalEvent } from "./events";
+import { isProblem, readEvents, readFeedbackFailures, type ApprovalEvent } from "./events";
+import { mintBetaCode, verifyBetaCode } from "../feedback/beta";
+import { parseProjects } from "../feedback/handler";
 import { daysLeft, makeReader, type GhReader } from "./github";
 import {
   buildItems, computeTotals, parseTraceFromComments,
@@ -12,6 +14,8 @@ export interface DashEnv {
   ALLOWED_REPOS: string;
   /** Salted hash of the owner's passphrase (see scripts/set-dashboard-passphrase.mjs) */
   DASHBOARD_PASS?: string;
+  /** JSON map of project id to { repo, name }; the apps that can receive feedback */
+  PROJECTS?: string;
   NTFY_PROGRESS_TOPIC?: string;
   VAPID_PRIVATE_JWK?: string;
   USED: KVNamespace;
@@ -91,6 +95,10 @@ export async function buildPayload(env: DashEnv, doFetch: Fetcher, nowMs: number
     problems.push({ level: "error", text: `Approval ${e.action ?? "tap"}${e.issue ? ` on #${e.issue}` : ""} failed at ${e.t.slice(0, 16).replace("T", " ")} UTC: ${e.message ?? e.code} (${e.status}).` });
   }
 
+  for (const f of (await readFeedbackFailures(env.USED)).filter((x) => Date.parse(x.t) >= weekAgo).slice(0, 5)) {
+    problems.push({ level: "error", text: `Feedback ${f.id} (${f.project}) could not be processed: ${f.failure}.` });
+  }
+
   const left = daysLeft(gh.tokenExpiry(), nowMs);
   if (left !== null && left <= 3) {
     problems.push({ level: left < 0 ? "error" : "warn", text: left < 0 ? "The Worker's GitHub token has expired. Approvals will fail until it is renewed." : `The Worker's GitHub token expires in ${left} day${left === 1 ? "" : "s"}. Renew it before then.` });
@@ -99,6 +107,7 @@ export async function buildPayload(env: DashEnv, doFetch: Fetcher, nowMs: number
   return {
     generatedAt: new Date(nowMs).toISOString(),
     repos,
+    projects: Object.entries(parseProjects(env.PROJECTS)).map(([id, p]) => ({ id, name: p.name, repo: p.repo })),
     items,
     totals,
     problems,
@@ -159,6 +168,32 @@ export async function handleDashboard(
     const payload = await buildPayload(env, doFetch, nowMs);
     await env.USED.put(CACHE_KEY, JSON.stringify({ at: nowMs, payload }), { expirationTtl: 60 });
     return json(200, payload);
+  }
+
+  if (pathname === "/v1/beta-codes" || pathname === "/v1/beta-codes/revoke") {
+    if (request.method !== "POST") return err(405, "method_not_allowed", "Use POST.");
+    if (!(await hasValidSession(request.headers.get("cookie"), env.SIGNING_KEY, nowSec))) return err(401, "login_required", "Sign in first.");
+    let body: Record<string, unknown>;
+    try { body = (await request.json()) as Record<string, unknown>; } catch { return err(400, "bad_request", "Send JSON."); }
+
+    if (pathname === "/v1/beta-codes") {
+      const project = typeof body.project === "string" ? body.project : "";
+      const tester = typeof body.tester === "string" ? body.tester.trim() : "";
+      const days = body.days === undefined ? 30 : Number(body.days);
+      if (!parseProjects(env.PROJECTS)[project]) return err(400, "unknown_project", "That project is not set up for feedback.");
+      if (!/^[\w .-]{1,40}$/.test(tester)) return err(400, "bad_tester", "Give the tester a short label (letters, numbers, spaces).");
+      if (!Number.isInteger(days) || days < 1 || days > 90) return err(400, "bad_days", "Days must be 1 to 90.");
+      const exp = nowSec + days * 86_400;
+      const nonce = [...crypto.getRandomValues(new Uint8Array(9))].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const code = await mintBetaCode({ p: project, t: tester, e: exp, n: nonce }, env.SIGNING_KEY);
+      return json(200, { code, project, tester, expiresAt: new Date(exp * 1000).toISOString() });
+    }
+
+    const code = typeof body.code === "string" ? body.code.trim() : "";
+    const v = await verifyBetaCode(code, env.SIGNING_KEY, nowSec);
+    if (!v.ok) return err(400, "invalid_code", v.reason === "expired" ? "That code has already expired, so it cannot be used." : "That is not a valid beta code.");
+    await env.USED.put(`beta:revoked:${v.payload.n}`, "1", { expirationTtl: Math.max(60, v.payload.e - nowSec + 3600) });
+    return json(200, { ok: true });
   }
 
   return null;

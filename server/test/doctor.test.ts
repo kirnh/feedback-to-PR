@@ -21,7 +21,7 @@ const healthy = (): World => ({
     "harness.config.yml": CONFIG,
   },
   canOpenPrs: true, protectedBranch: true,
-  workerSecrets: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS", "NTFY_PROGRESS_TOPIC"],
+  workerSecrets: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS", "NTFY_PROGRESS_TOPIC", "TRIAGE_LLM_KEY"],
   newestVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", liveVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   toml: 'ALLOWED_REPOS = "owner/app, other/repo"', health: 200, dashboard: 401,
 });
@@ -156,6 +156,11 @@ describe("doctor", () => {
     expect(find(r, "DASHBOARD_PASS")?.level).toBe("warn");
     expect(find(r, "DASHBOARD_PASS")?.fix).toContain("set-dashboard-passphrase");
     expect(find(r, "SIGNING_KEY")?.level).toBe("pass");
+  });
+
+  it("warns when intake has no triage key, with the one-command fix", async () => {
+    const r = find(await run({ ...healthy(), workerSecrets: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS", "NTFY_PROGRESS_TOPIC"] }), "TRIAGE_LLM_KEY");
+    expect(r).toMatchObject({ level: "warn", fix: "cd server && node scripts/set-triage-key.mjs" });
   });
 
   it("catches a Worker version that was uploaded but never made live", async () => {

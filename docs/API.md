@@ -54,6 +54,18 @@ curl -X POST "https://feedback-to-pr.example.workers.dev/v1/approve?t=$(...)"
 
 Format: `base64url(JSON{r,i,a,e,n}) . base64url(HMAC-SHA256(that first part, SIGNING_KEY))`. Fields: `r` owner/repo, `i` issue number, `a` `approve|reject`, `e` expiry (unix seconds), `n` random nonce of 8–64 characters. A TypeScript implementation is in `server/src/token.ts` (`sign`, `verify`) if you are minting from your own backend.
 
+### Feedback intake: `POST /v1/feedback`, `GET /v1/feedback/{id}`
+The contract is `spec/openapi.yaml` (a test keeps it in step with the code). Auth is a **beta code** as a Bearer token, bound to one project.
+
+- `POST /v1/feedback` with `{"message": "...", "context": {app_version, platform, os, device, screen, locale}}` returns **`202 {id, status: "received"}`** at once; triage runs in the background. Send an `Idempotency-Key` when retrying so one message is never filed twice. Errors: `400 empty_message | bad_json | too_large`, `401 missing_code | invalid_code | expired | revoked | unknown_project`, `429 slow_down` (10 per tester per hour) `| project_limit` (200 per project per day).
+- `GET /v1/feedback/{id}` returns `{id, status}` with status `received | triaged | duplicate | rejected | failed`. Only the tester who sent it can read it; anyone else gets `404`. A message still `received` after 5 minutes is reported as `failed`. The GitHub issue is never revealed to testers.
+- What happens to the message: it is cleaned (no HTML, hidden comments, links, mentions or issue references), a model rewrites it into a short anonymous issue (or marks it duplicate of an open issue, or rejects it), and **the original text is not stored on GitHub**. The issue carries the label `ai-triaged` and a hidden `<!-- f2pr-trace:triage ... -->` record that the judgement trace picks up. The model output is validated; an unusable answer is retried once, then the message is marked `failed` and shown on the dashboard under Problems.
+- The model is a setting, not code: `TRIAGE_PROVIDER` (`anthropic` or `openai-compatible`), `TRIAGE_MODEL`, `TRIAGE_BASE_URL` in `wrangler.toml`; the key is the Worker secret `TRIAGE_LLM_KEY`.
+- Projects are declared in the `PROJECTS` variable (`{"<id>": {"repo": "owner/name", "name": "Display name"}}`), and the repo must also be in `ALLOWED_REPOS`.
+
+### Beta codes: `POST /v1/beta-codes`, `POST /v1/beta-codes/revoke`
+Owner only (dashboard sign-in cookie). `{"project", "tester", "days"}` (1 to 90, default 30) returns `{code, expiresAt}`; the dashboard has an "Invite a tester" form for this. A code is signed, bound to one project, expires, and carries only a label you choose. `revoke` with `{"code"}` stops a code working immediately.
+
 ### Dashboard: `POST /v1/session`, `POST /v1/session/logout`, `GET /v1/dashboard`
 Read-only owner dashboard; the page is served at `/app/`.
 
@@ -150,6 +162,7 @@ Both must exist in the app repo (create them once).
 | Worker secret | `GITHUB_TOKEN` | Fine-grained PAT on allowed repos only: **Issues: read and write** (approvals), plus **Pull requests: read** and **Actions: read** (dashboard) |
 | Worker secret | `NTFY_PROGRESS_TOPIC` | Optional; acknowledgements are skipped without it |
 | Worker secret | `DASHBOARD_PASS` | Salted hash of the dashboard passphrase. Set with `node server/scripts/set-dashboard-passphrase.mjs` (typed hidden, verified by a test sign-in) |
+| Worker secret | `TRIAGE_LLM_KEY` | API key for the triage model. Set with `node server/scripts/set-triage-key.mjs` (tested first when the provider is Anthropic) |
 | Worker secret | `VAPID_PRIVATE_JWK` | Push test only. Create and store in one step with `node server/scripts/set-vapid-secret.mjs` (never goes through the clipboard) |
 | Worker var | `ALLOWED_REPOS` | Comma-separated `owner/repo` allowlist (in `wrangler.toml`) |
 | Worker var | `NTFY_SERVER` | Optional, default `https://ntfy.sh` |

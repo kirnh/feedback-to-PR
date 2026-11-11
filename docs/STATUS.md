@@ -16,7 +16,8 @@ This page separates **proven live** from **built but not yet proven** from **not
 | "Approved, starting", "PR ready", "Done", "Run failed" messages | Built and dry-run tested, **never run live** | Needs `NTFY_PROGRESS_TOPIC` set on the Worker and the fork (not set) |
 | Web push (foundation for the dashboard) | **Server side proven, iPhone not yet** | Worker → Apple push service answered `201`; five seconds later the MacBook page recorded being opened from a notification. iPhone test is next |
 | Owner dashboard (read-only) | **Built and deployed, awaiting two setup steps** | `/app/` on the Worker: every change by stage, runs, failures, spend, problems, system health. Needs a passphrase and two extra token permissions (section 6). 162 tests; page logic checked against a stub API |
-| Feedback box, intake API, triage AI | Not built | |
+| Intake API + triage AI (`POST /v1/feedback`) | **Built and deployed, awaiting the triage key** | 70 tests: hostile text and prompt injection, beta codes, limits, idempotency, duplicates, rejections, failures, privacy (original text never on GitHub). Not yet run with a real model |
+| In-app feedback section (SDK) | Not built | Next milestone (M3) |
 | Preview builds on a phone | Not started | |
 | Cheaper or other models | `aider` runner written, **untested** | |
 | Scoped checks (only judge what changed) | Not built | All three checks already fail on MediSync's `main` |
@@ -111,8 +112,12 @@ Bugs found by running it for real, now fixed and covered by tests: an unquoted `
 
 **Still needs the owner:** replace the rejected `ANTHROPIC_API_KEY`; add `Pull requests: Read` and `Actions: Read` to the Worker token; run `set-dashboard-passphrase.mjs`.
 
+## 7c. M2 (11 November, after the tag)
+
+Intake and triage are built: spec in `spec/openapi.yaml`, code in `server/src/feedback/`, owner-side beta codes with an "Invite a tester" form on the dashboard. **To run it for real:** `cd server && node scripts/set-triage-key.mjs`, make a code on the dashboard, then `node scripts/send-test-feedback.mjs`.
+
 ## 8. Quality gate at this milestone
 
-- 89 automated tests passed at the tag (218 now) (`cd server && npm test`); `tsc --noEmit` is clean
+- 89 automated tests passed at the tag (293 now) (`cd server && npm test`); `tsc --noEmit` is clean
 - All workflow and config YAML parses; every shell script passes `bash -n`
 - Notification payloads verified with `NTFY_DRY_RUN=1` for every outcome
