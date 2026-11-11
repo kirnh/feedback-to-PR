@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handlePush, isPushEndpoint, vapidFromJwk, type PushEnv } from "../src/push";
+import { handlePush, isPushEndpoint, vapidFromJwk, vapidProblem, type PushEnv } from "../src/push";
 import { b64urlEncode } from "../src/token";
 
 const kv = () => {
@@ -179,5 +179,27 @@ describe("POST /v1/push-test/send", () => {
     const b = await handlePush(post("/v1/push-test/send", { subscription: await newSubscription() }), env, ctx, ok, 1_001_000);
     const c = await handlePush(post("/v1/push-test/send", { subscription: await newSubscription() }), env, ctx, ok, 1_004_000);
     expect([a!.status, b!.status, c!.status]).toEqual([202, 429, 202]);
+  });
+});
+
+describe("vapidProblem explains a bad secret without revealing it", () => {
+  it("returns null for a good key", async () => expect(vapidProblem(await newVapidJwk())).toBeNull());
+  it.each([
+    [undefined, "not visible to the Worker"],
+    ["", "present but empty"],
+    ["not json at all", "not valid JSON"],
+    [JSON.stringify({ kty: "RSA" }), "not an EC P-256"],
+    [JSON.stringify({ kty: "EC", crv: "P-256", x: "a", y: "b" }), 'missing its "d"'],
+    [JSON.stringify({ kty: "EC", crv: "P-256", d: "a", x: "b", y: "c" }), "wrong length"],
+  ])("%s -> mentions %s", (raw, words) => expect(vapidProblem(raw as never)).toContain(words));
+  it("never echoes the key material", async () => {
+    const jwk = await newVapidJwk();
+    const broken = jwk.slice(0, -5); // truncated paste
+    expect(vapidProblem(broken)).not.toContain(JSON.parse(jwk).d);
+  });
+  it("the 503 on /v1/push/key carries the reason", async () => {
+    const res = await handlePush(new Request("https://w.example/v1/push/key"), { USED: env.USED, VAPID_PRIVATE_JWK: "{oops" }, makeCtx());
+    expect(res!.status).toBe(503);
+    expect(JSON.stringify(await res!.json())).toContain("not valid JSON");
   });
 });

@@ -50,6 +50,26 @@ export function vapidFromJwk(raw: string | undefined) {
   }
 }
 
+/**
+ * Why a stored key is unusable, in words that reveal nothing about the key itself.
+ * Used so a misconfigured secret produces a readable error instead of a silent 503.
+ */
+export function vapidProblem(raw: string | undefined, visibleNames: string[] = []): string | null {
+  if (raw === undefined) return `the VAPID_PRIVATE_JWK secret is not visible to the Worker (names it can see: ${visibleNames.join(", ") || "none"})`;
+  if (!raw) return "the VAPID_PRIVATE_JWK secret is present but empty";
+  let j: Record<string, unknown>;
+  try {
+    j = JSON.parse(raw);
+  } catch {
+    return `the stored value is not valid JSON (length ${raw.length}, first character code ${raw.charCodeAt(0)}, last ${raw.charCodeAt(raw.length - 1)})`;
+  }
+  if (!j || typeof j !== "object") return "the stored value is not a JSON object";
+  if (j.kty !== "EC" || j.crv !== "P-256") return "the stored key is not an EC P-256 key";
+  for (const part of ["d", "x", "y"]) if (typeof j[part] !== "string" || !j[part]) return `the stored key is missing its "${part}" part`;
+  for (const part of ["d", "x", "y"]) if ((j[part] as string).length !== 43) return `the "${part}" part has the wrong length (${(j[part] as string).length}, expected 43)`;
+  return vapidFromJwk(raw) ? null : "the stored key could not be decoded";
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const err = (status: number, code: string, message: string) => json(status, { error: { code, message } });
@@ -97,7 +117,7 @@ export async function handlePush(
   if (pathname === "/v1/push/key") {
     if (request.method !== "GET") return err(405, "method_not_allowed", "Use GET.");
     const vapid = vapidFromJwk(env.VAPID_PRIVATE_JWK);
-    if (!vapid) return err(503, "not_configured", "Push is not configured on this Worker.");
+    if (!vapid) return err(503, "not_configured", `Push is not configured: ${vapidProblem(env.VAPID_PRIVATE_JWK, Object.keys(env))}.`);
     return json(200, { publicKey: vapid.publicKey });
   }
 
