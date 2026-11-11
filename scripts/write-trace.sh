@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Assemble the judgement-chain trace for one fix run.
-# Writes /tmp/trace.json (machine-readable) and /tmp/trace.md (for the issue comment).
+# Writes trace.json (machine-readable) and trace.md (for the issue comment) in $TRACE_DIR (default /tmp).
 # Safe to run when earlier steps were skipped or failed: missing data becomes null.
 #
 # Chain, in order:  triage (if present) -> approval -> agent -> verification -> pull request
 set +e
+T="${TRACE_DIR:-/tmp}"
 
 num() { [ -f "$1" ] && cat "$1" || echo null; }
 hash() { [ -f "$1" ] && sha256sum "$1" | cut -c1-12 || echo null; }
@@ -18,21 +19,21 @@ fi
 
 # --- triage stage, if the intake service embedded one in the issue body ----------------
 triage=null
-if [ -f /tmp/issue.json ]; then
-  raw=$(jq -r .body /tmp/issue.json 2>/dev/null | sed -n 's/.*<!-- f2pr-trace:triage \(.*\) -->.*/\1/p' | head -1)
+if [ -f $T/issue.json ]; then
+  raw=$(jq -r .body $T/issue.json 2>/dev/null | sed -n 's/.*<!-- f2pr-trace:triage \(.*\) -->.*/\1/p' | head -1)
   if [ -n "$raw" ] && echo "$raw" | jq -e . >/dev/null 2>&1; then triage="$raw"; fi
 fi
 
 # --- verification: baseline vs after, per check -----------------------------------------
 checks='[]'
 for n in Lint Types Tests; do
-  b=$(num "/tmp/checks/baseline.$n.code"); a=$(num "/tmp/checks/after.$n.code")
+  b=$(num "$T/checks/baseline.$n.code"); a=$(num "$T/checks/after.$n.code")
   checks=$(echo "$checks" | jq -c --arg n "$n" --argjson b "$b" --argjson a "$a" \
     '. + [{check:$n, baseline_exit:$b, after_exit:$a, introduced: (($b==0) and ($a!=null) and ($a!=0))}]')
 done
 
 # --- outcome -------------------------------------------------------------------------------
-if [ -s /tmp/pr_url.txt ]; then outcome=pr_opened
+if [ -s $T/pr_url.txt ]; then outcome=pr_opened
 elif [ "$DIFF_CHANGED" = "false" ]; then outcome=no_change
 elif [ "$AGENT_OUTCOME" != "success" ]; then outcome=agent_failed
 else outcome=incomplete; fi
@@ -44,10 +45,10 @@ jq -n \
   --argjson issue "${ISSUE:-0}" --arg approved_by "$APPROVED_BY" \
   --arg runner "$RUNNER" --arg model_requested "$MODEL" --arg agent_outcome "$AGENT_OUTCOME" \
   --arg config_hash "$(hash harness.config.yml)" --arg fix_prompt_hash "$(hash .harness/prompts/fix.md)" \
-  --arg task_hash "$(hash /tmp/task.md)" \
+  --arg task_hash "$(hash $T/task.md)" \
   --argjson triage "$triage" --argjson agent "$agent" --argjson checks "$checks" \
-  --arg outcome "$outcome" --arg pr_url "$(cat /tmp/pr_url.txt 2>/dev/null)" --arg commit "$(cat /tmp/commit_sha.txt 2>/dev/null)" \
-  --rawfile changed /tmp/changed.txt \
+  --arg outcome "$outcome" --arg pr_url "$(cat $T/pr_url.txt 2>/dev/null)" --arg commit "$(cat $T/commit_sha.txt 2>/dev/null)" \
+  --rawfile changed $T/changed.txt \
   '{
     schema: "feedback-to-pr.trace/1",
     run: {url:$run_url, repo:$repo, base_sha:$base_sha, started_at:$started, finished_at:$finished},
@@ -63,7 +64,7 @@ jq -n \
       {stage:"pull_request", outcome:$outcome, pr_url:(if $pr_url=="" then null else $pr_url end),
        commit:(if $commit=="" then null else $commit end), files_changed:($changed | split("\n") | map(select(length>0)))}
     ]
-  }' > /tmp/trace.json
+  }' > $T/trace.json
 
 # --- readable version ----------------------------------------------------------------------
 {
@@ -82,8 +83,11 @@ jq -n \
     "| Agent | runner `\($ag.runner)`, model `\(($ag.models_used | join(",")) | if .=="" then $ag.model_requested else . end)`, outcome `\($ag.outcome)`, \($ag.turns // "?") turns, cost $\(if $ag.cost_usd then (($ag.cost_usd * 10000 | round) / 10000) else "n/a" end) |",
     "| Verification | " + ($v.checks | map("\(.check): \(if .baseline_exit==0 then "pass" else "fail" end) → \(if .after_exit==0 then "pass" else (if .after_exit==null then "n/a" else "fail" end) end)") | join("; ")) + " · introduced: \(if ($v.introduced_failures|length)==0 then "none" else ($v.introduced_failures|join(", ")) end) |",
     "| Result | `\($pr.outcome)`\(if $pr.pr_url then " → \($pr.pr_url)" else "" end) · \($pr.files_changed|length) file(s) |"
-  ' /tmp/trace.json
+  ' $T/trace.json
   echo
   echo "Run: $RUN_URL · harness \`$HARNESS_REF@${HARNESS_SHA:0:8}\` · config \`$(hash harness.config.yml)\` · full JSON is attached to the run as the \`trace\` artifact."
-} > /tmp/trace.md
+} > $T/trace.md
+
+# Exact copy for the dashboard, hidden in the comment. "-->" cannot appear inside it (escaped).
+printf '\n<!-- f2pr-trace %s -->\n' "$(jq -c . "$T/trace.json" | sed 's/-->/--\\u003e/g')" >> "$T/trace.md"
 exit 0

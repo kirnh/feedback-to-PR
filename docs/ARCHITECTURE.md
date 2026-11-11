@@ -115,6 +115,8 @@ A single Cloudflare Worker (`feedback-to-pr`) with one KV namespace (`USED`). Ty
 | `src/approve.ts` | The approve/reject handler |
 | `src/token.ts` | HMAC-SHA256 token sign/verify (Web Crypto) |
 | `src/ntfy.ts` | Builds and sends the "Approved/Rejected" acknowledgement |
+| `src/dashboard/` | Read-only dashboard: `handler.ts` (routes, caching, problems), `model.ts` (stage rules, trace parsing, totals), `auth.ts` (passphrase hash, session cookie, login rate limit), `github.ts` (read access, token-expiry), `events.ts` (approval log) |
+| `public/app/` | The dashboard page, served at `/app/` |
 | `src/push.ts` | Web Push feasibility test for the future dashboard (temporary) |
 | `public/push-test/` | Static test page, service worker, manifest, icons (served by Workers assets) |
 

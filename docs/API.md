@@ -54,6 +54,15 @@ curl -X POST "https://feedback-to-pr.example.workers.dev/v1/approve?t=$(...)"
 
 Format: `base64url(JSON{r,i,a,e,n}) . base64url(HMAC-SHA256(that first part, SIGNING_KEY))`. Fields: `r` owner/repo, `i` issue number, `a` `approve|reject`, `e` expiry (unix seconds), `n` random nonce of 8–64 characters. A TypeScript implementation is in `server/src/token.ts` (`sign`, `verify`) if you are minting from your own backend.
 
+### Dashboard: `POST /v1/session`, `POST /v1/session/logout`, `GET /v1/dashboard`
+Read-only owner dashboard; the page is served at `/app/`.
+
+- `POST /v1/session` with `{"passphrase": "..."}` → `200` and an `HttpOnly`, `Secure`, `SameSite=Strict` cookie valid 30 days. `401 wrong_passphrase`, `429 too_many_attempts` (5 wrong tries per client per 10 minutes), `503 not_configured` if no passphrase is set.
+- `GET /v1/dashboard` (cookie required, else `401 login_required`) → `{generatedAt, repos, items[], totals{counts, spentUsd, windowDays}, problems[], activity[], health}`. Cached 45 s; `?fresh=1` bypasses the cache.
+- An item is one issue labeled `ai-triaged` or `ai-fix`, with `stage` = `need | run | review | fail | done | rejected`, its PR and run when known, and the embedded trace (`approver`, `model`, `cost`, `turns`, `checks`, `introduced`, `files`). Runs are linked to issues by their name `AI fix #<n>`; PRs by branch `ai/issue-<n>`.
+- Each GitHub data source fails independently: a missing token permission appears in `problems` with the fix, and the rest still loads.
+- Approval attempts that carried a token are logged (last 60, 30 days) and 401/403/5xx ones appear as problems. The payload never contains tokens, link contents or the passphrase hash.
+
 ### `GET /v1/push/key`, `POST /v1/push-test/send`, `POST /v1/push-test/report`, `GET /v1/push-test/results`
 Temporary routes for the web-push feasibility test (installed home-screen page → Worker → push service). Not part of the stable API; they will be removed or replaced when the dashboard ships. `results` returns what the phone's service worker reported (push shown, tap opened the app, badge set) so nobody has to answer questions. `key` and `send` return `503 not_configured` unless `VAPID_PRIVATE_JWK` is set; the message says whether the secret is missing, empty or malformed, without revealing it. `send` validates that the subscription endpoint is a real push service, accepts `delay` 0–20 s and `badge` 0–99, and allows one send per 3 s.
 
@@ -138,8 +147,9 @@ Both must exist in the app repo (create them once).
 | App repo secret | `APPROVAL_SIGNING_KEY` | Signs approval links (same value as Worker `SIGNING_KEY`) |
 | App repo secret | `HARNESS_TOKEN` | Only for a private harness repo |
 | Worker secret | `SIGNING_KEY` | Verifies links |
-| Worker secret | `GITHUB_TOKEN` | Fine-grained PAT, **Issues: read and write** on allowed repos only |
+| Worker secret | `GITHUB_TOKEN` | Fine-grained PAT on allowed repos only: **Issues: read and write** (approvals), plus **Pull requests: read** and **Actions: read** (dashboard) |
 | Worker secret | `NTFY_PROGRESS_TOPIC` | Optional; acknowledgements are skipped without it |
+| Worker secret | `DASHBOARD_PASS` | Salted hash of the dashboard passphrase. Set with `node server/scripts/set-dashboard-passphrase.mjs` (typed hidden, verified by a test sign-in) |
 | Worker secret | `VAPID_PRIVATE_JWK` | Push test only. Create and store in one step with `node server/scripts/set-vapid-secret.mjs` (never goes through the clipboard) |
 | Worker var | `ALLOWED_REPOS` | Comma-separated `owner/repo` allowlist (in `wrangler.toml`) |
 | Worker var | `NTFY_SERVER` | Optional, default `https://ntfy.sh` |

@@ -1,4 +1,5 @@
 name: AI fix
+run-name: AI fix #${{ github.event.issue.number }}
 on:
   issues:
     types: [labeled]

@@ -116,6 +116,11 @@ Add repo secrets: `NTFY_TOPIC` (needs-you topic), `NTFY_PROGRESS_TOPIC`, and `AP
 3. Tap Approve: within about a second the progress topic says **Approved, starting**, the issue gains `ai-fix`, and the fix run begins.
 4. On completion: **PR ready** (needs-you) and **Done** (progress).
 
+### C5. Dashboard (optional)
+1. Edit the Worker's fine-grained token (GitHub → Settings → Developer settings → Fine-grained tokens) and add **Pull requests: Read** and **Actions: Read**. No new token or secret is needed.
+2. Choose a passphrase: `cd server && node scripts/set-dashboard-passphrase.mjs`. You type it twice (hidden); only a salted hash is stored, and the script signs in once to prove it works.
+3. Open `https://<worker>/app/`. In each app repo's `ai-fix.yml`, the run must be named `AI fix #<issue number>` (`run-name: AI fix #${{ github.event.issue.number }}`, already in the template) so the dashboard can link runs to issues.
+
 ## Adding more apps
 For each additional app: run `init.sh`, edit its config, add its secrets, labels and branch protection (part B), add its `owner/repo` to `ALLOWED_REPOS` and give the Worker's GitHub token access to it, then `npx wrangler deploy` (part C). The Worker and topics are shared. If you want per-app topics, use separate `NTFY_TOPIC` secrets per repo; the Worker's progress topic is global.
 

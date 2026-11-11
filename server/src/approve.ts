@@ -1,3 +1,4 @@
+import { recordEvent } from "./dashboard/events";
 import { sendAck, type NtfyEnv } from "./ntfy";
 import { verify } from "./token";
 
@@ -49,12 +50,15 @@ function gh(env: Env, ghFetch: GhFetch, path: string, init: RequestInit = {}) {
  * Approve adds the `ai-fix` label to a triaged, open issue. Reject closes it as not planned.
  * POST only: link scanners and previews issue GET requests and must never trigger an action.
  */
-export async function handleApprove(
+type ApprovalMeta = { repo?: string; issue?: number; action?: "approve" | "reject" };
+
+async function approveInner(
   request: Request,
   env: Env,
   nowSec: number = Math.floor(Date.now() / 1000),
   ghFetch: GhFetch = fetch,
   ntfyFetch: GhFetch = fetch,
+  meta: ApprovalMeta = {},
 ): Promise<Response> {
   if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.");
 
@@ -67,6 +71,7 @@ export async function handleApprove(
     return fail(v.reason === "malformed" ? 400 : 401, v.reason, "Invalid token.");
   }
   const { r: repo, i: issue, a: action, n: nonce, e: exp } = v.payload;
+  Object.assign(meta, { repo, issue, action });
 
   const allowed = env.ALLOWED_REPOS.split(",").map((s) => s.trim()).filter(Boolean);
   if (!allowed.includes(repo)) return fail(403, "repo_not_allowed", "Repository not allowed.");
@@ -109,4 +114,29 @@ export async function handleApprove(
     }).catch(() => undefined),
   ]);
   return json(200, { ok: true, action, repo, issue });
+}
+
+/**
+ * The public handler: runs the approval, then records the outcome in the event log so failures show
+ * up on the dashboard. Scanner hits (405) and requests with no token are not logged.
+ */
+export async function handleApprove(
+  request: Request,
+  env: Env,
+  nowSec: number = Math.floor(Date.now() / 1000),
+  ghFetch: GhFetch = fetch,
+  ntfyFetch: GhFetch = fetch,
+): Promise<Response> {
+  const meta: ApprovalMeta = {};
+  const res = await approveInner(request, env, nowSec, ghFetch, ntfyFetch, meta);
+  if (res.status !== 405) {
+    let code = "ok";
+    let message: string | undefined;
+    try {
+      const b = (await res.clone().json()) as { error?: { code?: string; message?: string } };
+      if (b.error) { code = b.error.code ?? "error"; message = b.error.message; }
+    } catch { /* body was not JSON */ }
+    if (code !== "missing_token") await recordEvent(env.USED, { t: new Date(nowSec * 1000).toISOString(), status: res.status, code, message, ...meta });
+  }
+  return res;
 }

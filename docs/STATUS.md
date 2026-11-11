@@ -15,7 +15,7 @@ This page separates **proven live** from **built but not yet proven** from **not
 | Guardrails (block `ai/*` PRs touching protected paths) | Built, **never verified blocking** | Workflow ran once and stopped at `action_required`; the fork has no branch protection, so it is advisory |
 | "Approved, starting", "PR ready", "Done", "Run failed" messages | Built and dry-run tested, **never run live** | Needs `NTFY_PROGRESS_TOPIC` set on the Worker and the fork (not set) |
 | Web push (foundation for the dashboard) | **Server side proven, iPhone not yet** | Worker → Apple push service answered `201`; five seconds later the MacBook page recorded being opened from a notification. iPhone test is next |
-| Owner dashboard | Mock only | `dashboard/mock.html` (example data) |
+| Owner dashboard (read-only) | **Built and deployed, awaiting two setup steps** | `/app/` on the Worker: every change by stage, runs, failures, spend, problems, system health. Needs a passphrase and two extra token permissions (section 6). 162 tests; page logic checked against a stub API |
 | Feedback box, intake API, triage AI | Not built | |
 | Preview builds on a phone | Not started | |
 | Cheaper or other models | `aider` runner written, **untested** | |
@@ -90,12 +90,16 @@ Setup and verification must not depend on the owner experimenting.
 2. `doctor` (checks every link end to end and names the fix) and `init` (installs, stores secrets with self-verification, finishes with a pass/fail summary).
 3. Automated end-to-end tests against a throwaway repo and a preview Worker, so changes are proven before they reach anyone's account.
 4. Platform findings go into a support matrix (section 3) so users never run probes.
-5. Finish the iPhone push test (the page now reports its own results), then build the dashboard: read-only, then approve and reject, then installable with push.
+5. **Dashboard first (moved up):** finish its two setup steps and use it; then approve and reject inside it; then installable with push. Finish the iPhone push test (the page reports its own results) alongside.
 6. Scope the checks to what changed.
 7. Intake and triage, with a swappable model.
 
-## 7. Quality gate at this milestone
+## 7. Added after the milestone tag
 
-- 89 automated tests pass (`cd server && npm test`); `tsc --noEmit` is clean
+The read-only dashboard (`server/src/dashboard/`, page at `/app/`), an approval event log that feeds its problems strip, the exact trace embedded in each issue comment, a run name (`AI fix #<n>`) that links runs to issues, and `set-dashboard-passphrase.mjs`. **To switch it on:** add `Pull requests: Read` and `Actions: Read` to the Worker's GitHub token, then run `node scripts/set-dashboard-passphrase.mjs` in `server/`.
+
+## 8. Quality gate at this milestone
+
+- 89 automated tests passed at the tag (162 now) (`cd server && npm test`); `tsc --noEmit` is clean
 - All workflow and config YAML parses; every shell script passes `bash -n`
 - Notification payloads verified with `NTFY_DRY_RUN=1` for every outcome
