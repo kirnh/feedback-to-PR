@@ -6,6 +6,11 @@ Turns labeled GitHub issues into draft pull requests, with phone approval and re
 app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix agent -> draft PR -> CI -> you merge
 ```
 
+## Documentation
+- [System design](docs/ARCHITECTURE.md): components, lifecycle, approval service, security model
+- [API and integration reference](docs/API.md): Worker endpoints, reusable workflows, config, secrets, labels
+- [Setup guide](docs/SETUP.md): connect any app repo, deploy the Worker, troubleshooting
+
 ## Layers
 | Layer | Where | Changes per repo? |
 |---|---|---|

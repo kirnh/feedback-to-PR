@@ -49,6 +49,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
     <h2>2. Allow notifications</h2>
     <span class="badge" id="b-perm">not yet</span>
     <button class="primary" id="enable" disabled>Allow notifications</button>
+    <p class="muted" id="setup-status"></p>
   </section>
 
   <section class="card">
@@ -64,7 +65,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 
   <section class="card" id="q">
     <h2>4. What happened?</h2>
-    <p class="muted">Tap the answer that matches. Each tap saves immediately.</p>
+    <p class="muted">These unlock after you send a push in step 3. Tap the answer that matches; each tap saves immediately.</p>
     <div>
       <p><b>It arrived while the app was closed or the phone locked</b></p>
       <div class="row"><button data-k="arrived_closed" data-v="yes">Yes</button><button data-k="arrived_closed" data-v="no">No</button></div>
@@ -100,6 +101,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
   function log(m) { logEl.textContent = new Date().toLocaleTimeString() + "  " + m + "\n" + logEl.textContent; }
   function badge(id, text, cls) { var e = $(id); e.textContent = text; e.className = "badge " + (cls || ""); }
   var savedEl = $("saved");
+  function showSetup(msg, bad) { var e = $("setup-status"); e.textContent = msg; e.style.color = bad ? "var(--bad)" : "var(--ok)"; }
 
   function report(k, v) {
     return fetch("/v1/push-test/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ k: k, v: String(v).slice(0, 80) }) })
@@ -107,12 +109,15 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
       .catch(function () { savedEl.textContent = "Could not save (offline?)"; });
   }
 
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
   var supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   var hasBadge = "setAppBadge" in navigator;
 
-  badge("b-install", standalone ? "installed" : "not installed", standalone ? "ok" : "warn");
+  var needsInstall = isIOS && !standalone;
+  badge("b-install", standalone ? "installed" : isIOS ? "not installed" : "optional here", standalone ? "ok" : isIOS ? "warn" : "");
   if (standalone) $("install-help").textContent = "Running from the Home Screen. Good.";
+  else if (!isIOS) $("install-help").textContent = "On a computer you can skip installing. Go to step 2.";
   log("standalone=" + standalone + " pushApi=" + supported + " badgeApi=" + hasBadge);
   report("installed", standalone ? "yes" : "no");
   report("api_support", (supported ? "push-yes" : "push-no") + " " + (hasBadge ? "badge-yes" : "badge-no"));
@@ -124,12 +129,16 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
     history.replaceState(null, "", "/push-test/");
   }
 
+  var answerBtns = document.querySelectorAll("#q button[data-k]");
+  function setAnswersEnabled(on) { answerBtns.forEach(function (b) { b.disabled = !on; }); }
+  setAnswersEnabled(false);
   function setSendEnabled(on) { ["send10", "send0", "sendBadge"].forEach(function (id) { $(id).disabled = !on; }); }
   function refreshPerm() {
     if (!supported) { badge("b-perm", "not supported here", "bad"); return; }
     var p = Notification.permission;
     badge("b-perm", p, p === "granted" ? "ok" : p === "denied" ? "bad" : "");
-    $("enable").disabled = !standalone || p === "denied";
+    $("enable").disabled = needsInstall || p === "denied";
+    if (p === "denied") showSetup("Notifications are blocked for this site. Re-enable them in system Settings, then reload.", true);
   }
   refreshPerm();
   if (supported && Notification.permission === "granted") subscribe(false);
@@ -159,12 +168,18 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
           }).then(function (sub) {
             subscription = sub.toJSON();
             log("Subscribed via " + new URL(sub.endpoint).hostname);
+            showSetup("Subscribed. Go to step 3.", false);
             report("subscribed", "yes");
             setSendEnabled(true);
           });
         });
       })
-      .catch(function (e) { log("Error: " + e.message); report("subscribed", "error " + e.message); });
+      .catch(function (e) {
+        log("Error: " + e.message); report("subscribed", "error " + e.message);
+        showSetup(/503/.test(e.message)
+          ? "Almost there: the server's push key is not installed yet (error 503). Notifications are allowed on this phone. Finish the server step, then reload this page and it will continue by itself."
+          : "Setup stopped: " + e.message, true);
+      });
   }
   $("enable").addEventListener("click", function () { subscribe(true); });
 
@@ -174,7 +189,7 @@ ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
     var body = { subscription: subscription, delay: delay, title: "Approve fix? #3", body: "Test notification from Change Inbox" };
     if (badgeN) body.badge = badgeN;
     fetch("/v1/push-test/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().then(function (j) { log("send -> " + r.status + " " + JSON.stringify(j)); if (!r.ok) $("send-status").textContent = "Failed: " + (j.error && j.error.message); }); })
+      .then(function (r) { return r.json().then(function (j) { log("send -> " + r.status + " " + JSON.stringify(j)); if (!r.ok) $("send-status").textContent = "Failed: " + (j.error && j.error.message); else setAnswersEnabled(true); }); })
       .catch(function (e) { log("send error: " + e.message); });
   }
   $("send10").addEventListener("click", function () { send(10, 0, "Sending in 10 seconds. Lock your phone now."); });
