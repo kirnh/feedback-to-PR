@@ -61,7 +61,7 @@ Secret **names** (values are never written anywhere in the repo):
 
 ## 4. Known issues and open items
 
-1. **A fix run failed and its cause is not known.** Run 42960507640 (issue #3): the agent step ended after 199 ms with 1 turn, $0 and no model used, reporting `success` with `is_error: true`. The request was rejected before any model ran, most likely an account, key or billing problem on the API side. The log does not include the message. Action: make the harness print the result text on failure, then re-run.
+1. **The repo's `ANTHROPIC_API_KEY` is rejected by Anthropic (HTTP 401, `invalid x-api-key`).** Found with `doctor --remote`. This is what failed run 42960507640 (issue #3): 199 ms, 1 turn, $0, no model used. Every fix run will fail until the key is replaced with `node scripts/set-anthropic-key.mjs --repo kirnh/MediSync`. Runs now fail in seconds at a preflight and say this on the issue, on the phone and on the dashboard.
 2. **Acknowledgements are skipped** until `NTFY_PROGRESS_TOPIC` is set (on both the Worker and the fork).
 3. **Guardrails are advisory** on the fork until branch protection requires the `AI guardrails` check.
 4. **Engine changes reach every app immediately** (`harness_ref` defaults to `main`). Pin a tag once stable.

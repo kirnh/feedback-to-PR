@@ -138,6 +138,18 @@ npx wrangler dev                 # local Worker; put secrets in server/.dev.vars
 ```
 Test notification payloads without sending: `NTFY_DRY_RUN=1 bash scripts/ntfy-send.sh topic "Title" "Message" tada 3`.
 
+## Check everything: `doctor`
+```bash
+node scripts/doctor.mjs --repo OWNER/app --worker https://<your-worker>.workers.dev          # secrets, labels, workflows, config, settings, Worker
+node scripts/doctor.mjs --repo OWNER/app --worker https://<...> --remote                      # also tests the repo's own ANTHROPIC_API_KEY
+```
+It reads only, never prints a secret, and prints the exact fix under each problem. Every fix run also starts with the same API-key check, so a bad key now fails in seconds with the reason instead of minutes later.
+
+To replace a rejected API key safely (the key is typed hidden, tested against the API first, and stored only if it works):
+```bash
+node scripts/set-anthropic-key.mjs --repo OWNER/app
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |
@@ -145,7 +157,9 @@ Test notification payloads without sending: `NTFY_DRY_RUN=1 bash scripts/ntfy-se
 | Labeling `ai-fix` does nothing | Workflow files are not on the default branch, or `OWNER` in `uses:` is wrong, or a private harness lacks Actions access |
 | `harness.config.yml missing` | Config must be at the app repo root on the branch checked out |
 | PR creation fails | Enable "Allow GitHub Actions to create and approve pull requests" |
-| Agent step fails immediately | Missing or wrong `ANTHROPIC_API_KEY` / provider key |
+| Run fails in the first seconds with `Anthropic API check failed (HTTP 401)` | The repo's `ANTHROPIC_API_KEY` is rejected. Run `node scripts/set-anthropic-key.mjs --repo OWNER/app` |
+| `Anthropic API check failed (HTTP 400)` mentioning credit | The Anthropic account has no credit. Add credit in the Anthropic console |
+| Agent step fails immediately (older runs) | Missing or wrong `ANTHROPIC_API_KEY`; the failure reason is now recorded in the trace and shown on the dashboard |
 | "finished without changing any files" | Issue too vague, or needs a product decision (the prompt tells the agent to stop and ask) |
 | Guardrails fail on an AI PR | The agent touched a protected path; fix the issue wording or the config |
 | No approval notification | `NTFY_TOPIC` or `APPROVAL_SIGNING_KEY` missing (job logs a notice and skips), or issue lacks `ai-triaged` |
