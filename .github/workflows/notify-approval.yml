@@ -1,0 +1,86 @@
+# Reusable workflow: push a one-tap Approve / Reject notification to the owner's phone via ntfy.
+#
+# The buttons carry a signed, expiring, single-use link to the approval Worker (server/).
+# No credential is in the notification: the GitHub token lives only inside the Worker.
+# Approve -> the Worker adds the `ai-fix` label (which starts the fix run).
+# Reject  -> the Worker closes the issue as not planned.
+name: Approval notification (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+      title:
+        required: true
+        type: string
+      issue_url:
+        required: true
+        type: string
+      worker_url:
+        description: Base URL of the deployed approval Worker, e.g. https://feedback-to-pr.<you>.workers.dev
+        required: true
+        type: string
+      ttl_seconds:
+        description: How long the links stay valid
+        required: false
+        type: number
+        default: 86400
+      ntfy_server:
+        required: false
+        type: string
+        default: https://ntfy.sh
+      harness_repository:
+        required: false
+        type: string
+        default: ""
+      harness_ref:
+        required: false
+        type: string
+        default: main
+    secrets:
+      NTFY_TOPIC:
+        required: false
+      APPROVAL_SIGNING_KEY:
+        required: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the harness
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.harness_repository || format('{0}/feedback-to-PR', github.repository_owner) }}
+          ref: ${{ inputs.harness_ref }}
+          path: .harness
+
+      - name: Send approval notification
+        env:
+          TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SIGNING_KEY: ${{ secrets.APPROVAL_SIGNING_KEY }}
+          SERVER: ${{ inputs.ntfy_server }}
+          WORKER: ${{ inputs.worker_url }}
+          TTL: ${{ inputs.ttl_seconds }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue_number }}
+          TITLE: ${{ inputs.title }}
+          ISSUE_URL: ${{ inputs.issue_url }}
+        run: |
+          if [ -z "$TOPIC" ] || [ -z "$SIGNING_KEY" ]; then
+            echo "::notice::Approval notifications are not configured (NTFY_TOPIC / APPROVAL_SIGNING_KEY missing); skipping."
+            exit 0
+          fi
+          approve=$(bash .harness/scripts/mint-approval-link.sh "$REPO" "$ISSUE" approve "$TTL")
+          reject=$(bash .harness/scripts/mint-approval-link.sh "$REPO" "$ISSUE" reject "$TTL")
+          payload=$(jq -n \
+            --arg topic "$TOPIC" --arg title "Approve fix? #$ISSUE" --arg msg "$TITLE" --arg click "$ISSUE_URL" \
+            --arg a "${WORKER%/}/v1/approve?t=$approve" --arg r "${WORKER%/}/v1/approve?t=$reject" '
+            {topic:$topic, title:$title, message:$msg, click:$click, tags:["robot"], priority:4,
+             actions:[
+               {action:"http", label:"Approve", url:$a, method:"POST", clear:true},
+               {action:"http", label:"Reject",  url:$r, method:"POST", clear:true}
+             ]}')
+          curl -sS -f -X POST -H "Content-Type: application/json" -d "$payload" "$SERVER" > /dev/null
+          echo "Notification sent for issue #$ISSUE (links valid for ${TTL}s)"

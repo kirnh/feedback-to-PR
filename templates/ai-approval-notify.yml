@@ -1,0 +1,19 @@
+name: AI approval notification
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  notify:
+    if: github.event.label.name == 'ai-triaged'
+    # Change OWNER to the account that holds feedback-to-PR.
+    uses: OWNER/feedback-to-PR/.github/workflows/notify-approval.yml@main
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      title: ${{ github.event.issue.title }}
+      issue_url: ${{ github.event.issue.html_url }}
+      # Change to your deployed approval Worker URL.
+      worker_url: https://feedback-to-pr.example.workers.dev
+    secrets:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      APPROVAL_SIGNING_KEY: ${{ secrets.APPROVAL_SIGNING_KEY }}

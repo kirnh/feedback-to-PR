@@ -1,0 +1,13 @@
+import { handleApprove, type Env } from "./approve";
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    if (pathname === "/v1/health") return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json" } });
+    if (pathname === "/v1/approve") return handleApprove(request, env);
+    return new Response(JSON.stringify({ error: { code: "not_found", message: "Not found." } }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  },
+};
