@@ -2,6 +2,11 @@ name = "feedback-to-pr"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
 
+# Keep and search Worker logs in the Cloudflare dashboard (Workers & Pages > feedback-to-pr > Observability).
+# Logs record GitHub status codes and messages only, never tokens or link contents.
+[observability]
+enabled = true
+
 [vars]
 # Comma-separated owner/repo list this Worker may act on.
 ALLOWED_REPOS = "kirnh/MediSync"
@@ -10,7 +15,7 @@ ALLOWED_REPOS = "kirnh/MediSync"
 # then paste the printed id below.
 [[kv_namespaces]]
 binding = "USED"
-id = "REPLACE_WITH_KV_ID"
+id = "781b6074f62f481a901c1b9e2ed46c91"
 
 # Secrets (set with `npx wrangler secret put <NAME>`, never committed):
 #   SIGNING_KEY   shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo

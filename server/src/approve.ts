@@ -18,6 +18,18 @@ const json = (status: number, body: unknown) =>
 
 const fail = (status: number, code: string, message: string) => json(status, { error: { code, message } });
 
+/** Log why GitHub said no. Status and GitHub's own message only; never headers or the token. */
+async function ghFailed(step: string, res: Response): Promise<string> {
+  let message = "";
+  try {
+    message = String(((await res.json()) as { message?: string }).message ?? "").slice(0, 200);
+  } catch {
+    /* body was not JSON */
+  }
+  console.log(JSON.stringify({ step, github_status: res.status, github_message: message }));
+  return `GitHub returned ${res.status} ${step}${message ? `: ${message}` : ""}.`;
+}
+
 function gh(env: Env, ghFetch: GhFetch, path: string, init: RequestInit = {}) {
   return ghFetch(`https://api.github.com${path}`, {
     ...init,
@@ -61,7 +73,7 @@ export async function handleApprove(
 
   // The issue must still be an open, triaged candidate that has not been approved yet.
   const res = await gh(env, ghFetch, `/repos/${repo}/issues/${issue}`);
-  if (!res.ok) return fail(502, "github_error", `GitHub returned ${res.status} reading the issue.`);
+  if (!res.ok) return fail(502, "github_error", await ghFailed("reading the issue", res));
   const data = (await res.json()) as { state: string; labels: Array<{ name: string } | string> };
   const labels = data.labels.map((l) => (typeof l === "string" ? l : l.name));
   if (data.state !== "open") return fail(409, "not_open", "The issue is not open.");
@@ -73,13 +85,13 @@ export async function handleApprove(
       method: "POST",
       body: JSON.stringify({ labels: ["ai-fix"] }),
     });
-    if (!r.ok) return fail(502, "github_error", `GitHub returned ${r.status} adding the label.`);
+    if (!r.ok) return fail(502, "github_error", await ghFailed("adding the label", r));
   } else {
     const r = await gh(env, ghFetch, `/repos/${repo}/issues/${issue}`, {
       method: "PATCH",
       body: JSON.stringify({ state: "closed", state_reason: "not_planned" }),
     });
-    if (!r.ok) return fail(502, "github_error", `GitHub returned ${r.status} closing the issue.`);
+    if (!r.ok) return fail(502, "github_error", await ghFailed("closing the issue", r));
   }
 
   // Leave an audit note on the issue (best effort; the action itself already succeeded).
