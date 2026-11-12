@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { mintBetaCode } from "../src/feedback/beta";
 import { handleFeedback, type FeedbackEnv } from "../src/feedback/handler";
 
 // The published contract (spec/openapi.yaml) must describe what the Worker really does.
@@ -15,19 +14,17 @@ const NOW = Date.parse("2026-11-11T08:00:00Z");
 const kv = () => { const m = new Map<string, string>(); return { get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: string) => void m.set(k, v) }; };
 let env: FeedbackEnv;
 const ctx = { waitUntil() {} };
-beforeEach(() => { env = { SIGNING_KEY: "k".repeat(32), GITHUB_TOKEN: "t", ALLOWED_REPOS: "o/r", PROJECTS: '{"app":{"repo":"o/r","name":"App"}}', USED: kv() }; });
-const code = () => mintBetaCode({ p: "app", t: "a", e: Math.floor(NOW / 1000) + 3600, n: "nonce-0123456" }, env.SIGNING_KEY);
+beforeEach(() => { env = { GITHUB_TOKEN: "t", ALLOWED_REPOS: "o/r", PROJECTS: '{"app":{"repo":"o/r","name":"App"}}', USED: kv() }; });
 
 describe("spec/openapi.yaml", () => {
-  it("is a valid OpenAPI 3.1 document with the intake paths and a bearer scheme", () => {
+  it("is a valid OpenAPI 3.1 document with the intake paths and the project header", () => {
     expect(spec.openapi).toBe("3.1.0");
     expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(["/v1/health", "/v1/feedback", "/v1/feedback/{id}"]));
-    expect(spec.components.securitySchemes).toHaveProperty("betaCode");
-    expect(spec.paths["/v1/feedback"].post.security).toBeTruthy();
+    expect(JSON.stringify(spec.paths["/v1/feedback"].post)).toContain("X-Project");
   });
 
   it("documents exactly the statuses POST /v1/feedback can return", () => {
-    expect(Object.keys(spec.paths["/v1/feedback"].post.responses).sort()).toEqual(["202", "400", "401", "429"]);
+    expect(Object.keys(spec.paths["/v1/feedback"].post.responses).sort()).toEqual(["202", "400", "404", "429"]);
   });
 
   it("lists every status the service can report", () => {
@@ -38,8 +35,8 @@ describe("spec/openapi.yaml", () => {
     const docs = spec.paths["/v1/feedback"].post.responses;
     const req = (headers: Record<string, string>, body: string) => new Request("https://w.example/v1/feedback", { method: "POST", headers, body });
     const results = [
-      (await handleFeedback(req({ authorization: `Bearer ${await code()}` }, JSON.stringify({ message: "hello there" })), env, ctx, undefined, NOW))!.status,
-      (await handleFeedback(req({ authorization: `Bearer ${await code()}` }, "{bad"), env, ctx, undefined, NOW))!.status,
+      (await handleFeedback(req({ "x-project": "app" }, JSON.stringify({ message: "hello there" })), env, ctx, undefined, NOW))!.status,
+      (await handleFeedback(req({ "x-project": "app" }, "{bad"), env, ctx, undefined, NOW))!.status,
       (await handleFeedback(req({}, "{}"), env, ctx, undefined, NOW))!.status,
     ];
     for (const status of results) expect(Object.keys(docs)).toContain(String(status));

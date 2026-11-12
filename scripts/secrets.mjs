@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // The one place to see and set every key.
 //
-//   node scripts/secrets.mjs list          what exists, where, what it is for, and what needs attention
+//   node scripts/secrets.mjs list          what exists, where
 //   node scripts/secrets.mjs setup         set everything that is missing and required, one at a time
-//   node scripts/secrets.mjs set <ID>      set or replace one key (typed hidden, or generated; checked before it is stored)
+//   node scripts/secrets.mjs set <ID>      set or replace one key (typed hidden; checked before it is stored)
 //   node scripts/secrets.mjs doc           rewrite docs/SECRETS.md from secrets.manifest.json
 //
 // Keys live in GitHub secrets (the harness repo, plus each app repo for the ones an app needs).
@@ -30,7 +30,7 @@ export const loadManifest = (root = ROOT) => JSON.parse(readFileSync(join(root, 
 export function buildInventory(manifest, facts, nowMs) {
   const has = (list, name) => (list ?? []).find((x) => x.name === name);
   return manifest.secrets.map((s) => {
-    const row = { id: s.id, label: s.label, scope: s.scope, required: !!s.required, what: s.what, usedBy: s.usedBy, derived: !!s.derivedFrom };
+    const row = { id: s.id, label: s.label, scope: s.scope, required: !!s.required, what: s.what, usedBy: s.usedBy };
     let status = "set", note = "", updated = null;
 
     if (s.scope === "app") {
@@ -66,14 +66,14 @@ export function renderInventory(rows) {
   for (const [scope, title] of [["harness", "Deploy (GitHub secrets of the harness repo only)"], ["worker", "Cloudflare Worker (kept in GitHub, copied by the deploy job)"], ["app", "App repos (one copy per app)"]]) {
     out.push(title);
     for (const r of rows.filter((x) => x.scope === scope)) {
-      out.push(`  ${LABEL[r.status].padEnd(9)} ${r.id}${r.required ? "" : "  (optional)"}${r.derived ? "  (copied automatically)" : ""}`);
+      out.push(`  ${LABEL[r.status].padEnd(9)} ${r.id}${r.required ? "" : "  (optional)"}`);
       out.push(`            ${r.what}`);
       out.push(`            Used by: ${r.usedBy.join("; ")}`);
       if (r.note) out.push(`            >> ${r.note}`);
     }
     out.push("");
   }
-  const need = rows.filter((r) => r.required && !r.derived && ["missing", "expired?", "legacy"].includes(r.status));
+  const need = rows.filter((r) => r.required && ["missing", "expired?", "legacy"].includes(r.status));
   out.push(need.length ? `${need.length} required key(s) need attention: ${need.map((r) => r.id).join(", ")}. Run: node scripts/secrets.mjs setup` : "All required keys are set.");
   return out.join("\n");
 }
@@ -102,9 +102,7 @@ export function renderDoc(manifest) {
       L.push(`### \`${s.id}\`${s.workerName ? ` (Cloudflare: \`${s.workerName}\`)` : ""}${s.required ? "" : " (optional)"}`, "", s.what, "");
       L.push(`- **Used by:** ${s.usedBy.join("; ")}`);
       L.push(`- **How to get it:** ${s.howToGet}`);
-      if (s.derivedFrom) L.push(`- **Set by:** \`${s.derivedFrom}\`, automatically`);
-      else L.push(`- **Set it:** \`node scripts/secrets.mjs set ${s.id}\``);
-      if (s.alsoSetInApps) L.push(`- **Also sets** \`${s.alsoSetInApps}\` in every app repo`);
+      L.push(`- **Set it:** \`node scripts/secrets.mjs set ${s.id}\``);
       if (s.expiresInDays) L.push(`- **Expires:** meant to last ${s.expiresInDays} days; \`list\` warns before then`);
       L.push("");
     }
@@ -130,11 +128,7 @@ export function gatherFacts(manifest, sh, root = ROOT) {
 
 /** Where a typed/generated value must be written. */
 export function storesFor(manifest, entry) {
-  const stores = [];
-  if (entry.scope === "app") for (const app of manifest.apps) stores.push({ repo: app, name: entry.id });
-  else stores.push({ repo: manifest.harnessRepo, name: entry.id });
-  if (entry.alsoSetInApps) for (const app of manifest.apps) stores.push({ repo: app, name: entry.alsoSetInApps });
-  return stores;
+  return entry.scope === "app" ? manifest.apps.map((app) => ({ repo: app, name: entry.id })) : [{ repo: manifest.harnessRepo, name: entry.id }];
 }
 
 function readTomlSetting(root, name, fallback) {
@@ -143,14 +137,13 @@ function readTomlSetting(root, name, fallback) {
 }
 
 export async function setSecret(manifest, id, deps) {
-  const { sh, ask, hashPassphrase, say, root = ROOT } = deps;
+  const { sh, ask, say, root = ROOT } = deps;
   const entry = manifest.secrets.find((s) => s.id === id);
   if (!entry) return { ok: false, message: `Unknown key '${id}'. Run 'list' to see the names.` };
-  if (entry.derivedFrom) return { ok: false, message: `${id} is a copy. Set ${entry.derivedFrom} instead and it follows automatically.` };
 
   say(`\n${entry.label} (${id})\n  ${entry.what}\n  Used by: ${entry.usedBy.join("; ")}\n  How to get it: ${entry.howToGet}\n`);
   const ctx = { apps: manifest.apps, cloudflareAccountId: manifest.cloudflareAccountId, fetch: deps.fetch, triageProvider: readTomlSetting(root, "TRIAGE_PROVIDER", "anthropic"), triageModel: readTomlSetting(root, "TRIAGE_MODEL", "claude-haiku-5-5"), agentModel: "claude-sonnet-5-5" };
-  const made = await runRecipe(entry.recipe, { ask, ctx, hashPassphrase });
+  const made = await runRecipe(entry.recipe, { ask, ctx });
   if (made.error) return { ok: false, message: made.error };
 
   const stored = [];
@@ -160,10 +153,6 @@ export async function setSecret(manifest, id, deps) {
     stored.push(`${name} in ${repo}`);
   }
 
-  if (entry.recipe.kind === "topic") {
-    const copied = sh("pbcopy", [], { input: made.value }).code === 0;
-    say(copied ? "The topic name is on your clipboard. In the ntfy app tap +, paste it, and subscribe. (Do not copy anything else first.)" : "Could not use the clipboard; the topic name was stored but not shown.");
-  }
   return { ok: true, stored, needsDeploy: entry.scope === "worker" || entry.id === "CLOUDFLARE_API_TOKEN", message: `Stored: ${stored.join("; ")}.` };
 }
 
@@ -192,7 +181,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const manifest = loadManifest();
   const sh = defaultSh;
   const say = (m) => console.log(m);
-  const hashPassphrase = async (p) => (await import("../server/scripts/lib/passphrase-hash.mjs")).storedPassphrase(p);
 
   if (cmd === "list") {
     const rows = buildInventory(manifest, gatherFacts(manifest, sh), Date.now());
@@ -201,18 +189,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     writeFileSync(join(ROOT, "docs/SECRETS.md"), renderDoc(manifest));
     console.log("Wrote docs/SECRETS.md");
   } else if (cmd === "set" && arg) {
-    const r = await setSecret(manifest, arg, { sh, ask: askHidden, hashPassphrase, say });
+    const r = await setSecret(manifest, arg, { sh, ask: askHidden, say });
     console.log(r.message);
     if (!r.ok) process.exit(1);
     if (r.needsDeploy && !(await deployAndWait(manifest, sh, say))) process.exit(1);
   } else if (cmd === "setup") {
-    const all = buildInventory(manifest, gatherFacts(manifest, sh), Date.now()).filter((r) => !r.derived && ["missing", "expired?", "legacy"].includes(r.status));
+    const all = buildInventory(manifest, gatherFacts(manifest, sh), Date.now()).filter((r) => ["missing", "expired?", "legacy"].includes(r.status));
     // A fresh reader per question: one left open would echo the hidden input and break it.
     const askYesNo = async (q) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); try { return /^y/i.test(await rl.question(q)); } finally { rl.close(); } };
     let changed = false;
     for (const r of all) {
       if (!r.required && !(await askYesNo(`\nOptional: ${r.label}. ${r.what}\nSet it now? (y/N) `))) continue;
-      const res = await setSecret(manifest, r.id, { sh, ask: askHidden, hashPassphrase, say });
+      const res = await setSecret(manifest, r.id, { sh, ask: askHidden, say });
       console.log(res.message);
       if (!res.ok) process.exit(1);
       changed = true;

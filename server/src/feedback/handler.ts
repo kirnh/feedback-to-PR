@@ -1,11 +1,15 @@
-import { recordFeedbackFailure, type Kv } from "../dashboard/events";
-import { verifyBetaCode, type BetaPayload } from "./beta";
 import { makeLlm, type LlmEnv } from "./llm";
 import { cleanText } from "./sanitize";
 import { triage, type TriageResult } from "./triage";
 
+/** The slice of Workers KV this code uses. */
+export interface Kv {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface FeedbackEnv extends LlmEnv {
-  SIGNING_KEY: string;
+  /** Fine-grained GitHub token: Issues read/write on the allowed repos. Never leaves this Worker. */
   GITHUB_TOKEN: string;
   ALLOWED_REPOS: string;
   /** JSON: { "<project id>": { "repo": "owner/name", "name": "Display name" } } */
@@ -20,8 +24,8 @@ export type FeedbackStatus = "received" | "triaged" | "duplicate" | "rejected" |
 export interface FeedbackRecord { id: string; status: FeedbackStatus; project: string; reporter: string; at: string; failure?: string }
 
 const CONTEXT_KEYS = ["app_version", "platform", "os", "device", "screen", "locale"] as const;
-const PER_TESTER_PER_HOUR = 10;
-const PER_PROJECT_PER_DAY = 200;
+const PER_SENDER_PER_HOUR = 5;
+const PER_PROJECT_PER_DAY = 50;
 const MAX_BODY = 8192;
 
 const json = (status: number, body: unknown) =>
@@ -70,7 +74,7 @@ export function issueBody(r: TriageResult, context: Record<string, string>, trac
     r.body,
     "",
     ctxLine ? `**Context:** ${ctxLine}` : "",
-    "_Reported by a beta tester through the in-app feedback section. The original message is not stored on GitHub._",
+    "_Reported by a beta tester through the in-app feedback box. The original message is not stored on GitHub._",
     "",
     // Machine-readable triage record; only fields we control, so "-->" cannot appear inside it.
     `<!-- f2pr-trace:triage ${JSON.stringify(trace)} -->`,
@@ -79,7 +83,8 @@ export function issueBody(r: TriageResult, context: Record<string, string>, trac
 
 async function save(env: FeedbackEnv, rec: FeedbackRecord) {
   await env.USED.put(`fb:${rec.id}`, JSON.stringify(rec), { expirationTtl: 30 * 86_400 });
-  if (rec.status === "failed") await recordFeedbackFailure(env.USED, { t: new Date().toISOString(), id: rec.id, project: rec.project, failure: rec.failure ?? "unknown" });
+  // Visible in Cloudflare > Workers > Observability. Reason only, never the message.
+  if (rec.status === "failed") console.log(JSON.stringify({ feedback: rec.id, project: rec.project, failure: rec.failure ?? "unknown" }));
 }
 
 /** The background half: triage the message and act on GitHub. Never throws; failures become a status. */
@@ -118,16 +123,13 @@ async function process(env: FeedbackEnv, doFetch: Fetcher, rec: FeedbackRecord, 
   }
 }
 
-async function authenticate(request: Request, env: FeedbackEnv, nowSec: number): Promise<{ ok: true; payload: BetaPayload; repo: string; name: string } | { ok: false; res: Response }> {
-  const code = /^Bearer\s+(\S+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
-  if (!code) return { ok: false, res: err(401, "missing_code", "Send your beta code as a Bearer token.") };
-  const v = await verifyBetaCode(code, env.SIGNING_KEY, nowSec);
-  if (!v.ok) return { ok: false, res: v.reason === "expired" ? err(401, "expired", "This beta code has expired. Ask the app owner for a new one.") : err(401, "invalid_code", "This beta code is not valid.") };
-  if (await env.USED.get(`beta:revoked:${v.payload.n}`)) return { ok: false, res: err(401, "revoked", "This beta code was revoked.") };
-  const project = parseProjects(env.PROJECTS)[v.payload.p];
-  const allowed = env.ALLOWED_REPOS.split(",").map((s) => s.trim());
-  if (!project || !allowed.includes(project.repo)) return { ok: false, res: err(401, "unknown_project", "This beta code is for a project this service does not know.") };
-  return { ok: true, payload: v.payload, repo: project.repo, name: project.name };
+/** The app names its project in the X-Project header; unknown or disallowed projects are refused. */
+function resolveProject(request: Request, env: FeedbackEnv): { ok: true; id: string; repo: string; name: string } | { ok: false; res: Response } {
+  const id = request.headers.get("x-project") ?? "";
+  const project = parseProjects(env.PROJECTS)[id];
+  const allowed = env.ALLOWED_REPOS.split(",").map((x) => x.trim());
+  if (!project || !allowed.includes(project.repo)) return { ok: false, res: err(404, "unknown_project", "Unknown project.") };
+  return { ok: true, id, repo: project.repo, name: project.name };
 }
 
 /** POST /v1/feedback and GET /v1/feedback/{id}. Null when the path is not ours. */
@@ -138,12 +140,12 @@ export async function handleFeedback(request: Request, env: FeedbackEnv, ctx: Ct
   const m = /^\/v1\/feedback\/(fb_[0-9a-f]{12})$/.exec(pathname);
   if (m) {
     if (request.method !== "GET") return err(405, "method_not_allowed", "Use GET.");
-    const auth = await authenticate(request, env, nowSec);
+    const auth = resolveProject(request, env);
     if (!auth.ok) return auth.res;
     const raw = await env.USED.get(`fb:${m[1]}`);
     const rec = raw ? (JSON.parse(raw) as FeedbackRecord) : null;
-    // Only the tester who sent it may read it; anyone else gets the same answer as for an unknown id.
-    if (!rec || rec.project !== auth.payload.p || rec.reporter !== (await sha(auth.payload.n, 8))) return err(404, "not_found", "No such feedback.");
+    // The id is random and unguessable; it must also belong to the project named in the request.
+    if (!rec || rec.project !== auth.id) return err(404, "not_found", "No such feedback.");
     // A message still "received" after 5 minutes was lost (for example the Worker restarted): say so honestly.
     const stale = rec.status === "received" && nowMs - Date.parse(rec.at) > 5 * 60_000;
     return json(200, { id: rec.id, status: stale ? "failed" : rec.status });
@@ -152,9 +154,11 @@ export async function handleFeedback(request: Request, env: FeedbackEnv, ctx: Ct
   if (pathname !== "/v1/feedback") return null;
   if (request.method !== "POST") return err(405, "method_not_allowed", "Use POST.");
 
-  const auth = await authenticate(request, env, nowSec);
+  const auth = resolveProject(request, env);
   if (!auth.ok) return auth.res;
-  const { payload, repo, name } = auth;
+  const { id: project, repo, name } = auth;
+  // Who is sending, for rate limiting only. Stored as a short hash, never the address itself.
+  const sender = await sha(`${project}:${request.headers.get("cf-connecting-ip") ?? "unknown"}`, 12);
 
   const text = await request.text();
   if (text.length > MAX_BODY) return err(400, "too_large", "That message is too large.");
@@ -172,18 +176,18 @@ export async function handleFeedback(request: Request, env: FeedbackEnv, ctx: Ct
 
   const idem = request.headers.get("idempotency-key");
   if (idem && idem.length <= 64) {
-    const prior = await env.USED.get(`idem:${payload.p}:${await sha(idem, 24)}`);
+    const prior = await env.USED.get(`idem:${project}:${await sha(idem, 24)}`);
     if (prior) return json(202, { id: prior, status: "received" });
   }
 
   const hour = Math.floor(nowSec / 3600), day = Math.floor(nowSec / 86400);
-  if (!(await underLimit(env.USED, `rl:fb:t:${payload.n}:${hour}`, PER_TESTER_PER_HOUR, 3700))) return err(429, "slow_down", "You have sent a lot of feedback in the last hour. Please try again later.");
-  if (!(await underLimit(env.USED, `rl:fb:p:${payload.p}:${day}`, PER_PROJECT_PER_DAY, 90_000))) return err(429, "project_limit", "This app has reached today's feedback limit.");
+  if (!(await underLimit(env.USED, `rl:fb:s:${sender}:${hour}`, PER_SENDER_PER_HOUR, 3700))) return err(429, "slow_down", "A lot of feedback was sent from this device in the last hour. Please try again later.");
+  if (!(await underLimit(env.USED, `rl:fb:p:${project}:${day}`, PER_PROJECT_PER_DAY, 90_000))) return err(429, "project_limit", "This app has reached today's feedback limit.");
 
   const id = `fb_${[...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
-  const rec: FeedbackRecord = { id, status: "received", project: payload.p, reporter: await sha(payload.n, 8), at: new Date(nowMs).toISOString() };
+  const rec: FeedbackRecord = { id, status: "received", project: project, reporter: sender.slice(0, 8), at: new Date(nowMs).toISOString() };
   await save(env, rec);
-  if (idem && idem.length <= 64) await env.USED.put(`idem:${payload.p}:${await sha(idem, 24)}`, id, { expirationTtl: 86_400 });
+  if (idem && idem.length <= 64) await env.USED.put(`idem:${project}:${await sha(idem, 24)}`, id, { expirationTtl: 86_400 });
 
   ctx.waitUntil(process(env, doFetch, rec, repo, name, message, context));
   return json(202, { id, status: "received" });

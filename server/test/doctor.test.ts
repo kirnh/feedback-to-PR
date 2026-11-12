@@ -14,7 +14,7 @@ const CONFIG = "project: App\ncommands:\n  install: yarn install\n  lint: yarn l
 interface World {
   ghAuth: boolean; repoVisible: boolean; secrets: string[]; labels: string[]; files: Record<string, string>;
   canOpenPrs: boolean; protectedBranch: boolean; workerSecrets: string[] | null; newestVersion: string; liveVersion: string;
-  toml: string; health: number; dashboard: number;
+  toml: string; health: number;
 }
 const healthy = (): World => ({
   ghAuth: true, repoVisible: true,
@@ -22,13 +22,13 @@ const healthy = (): World => ({
   labels: ["bug", "ai-fix", "ai-triaged"],
   files: {
     ".github/workflows/ai-fix.yml": 'name: AI fix\nrun-name: "AI fix #${{ github.event.issue.number }}"\n',
-    ".github/workflows/ai-guardrails.yml": "x", ".github/workflows/ai-approval-notify.yml": "x", ".github/workflows/ai-doctor.yml": "x",
+    ".github/workflows/ai-guardrails.yml": "x", ".github/workflows/ai-ready.yml": "x", ".github/workflows/ai-doctor.yml": "x",
     "harness.config.yml": CONFIG,
   },
   canOpenPrs: true, protectedBranch: true,
   workerSecrets,
   newestVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", liveVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  toml: 'ALLOWED_REPOS = "owner/app, other/repo"', health: 200, dashboard: 401,
+  toml: 'ALLOWED_REPOS = "owner/app, other/repo"', health: 200,
 });
 
 function deps(w: World) {
@@ -39,7 +39,7 @@ function deps(w: World) {
     manifest,
     readFile: () => w.toml,
     fileExists: () => true,
-    fetchJson: async (url: string) => (url.endsWith("/v1/health") ? { status: w.health, json: {} } : { status: w.dashboard, json: {} }),
+    fetchJson: async () => ({ status: w.health, json: {} }),
     sh: (cmd: string, args: string[]) => {
       const a = args.join(" ");
       if (cmd === "gh") {
@@ -83,11 +83,10 @@ describe("doctor", () => {
     expect(levels(r, "fail")[0].title).toContain("Cannot read owner/app");
   });
 
-  it("a missing Anthropic key is a failure with the exact command; missing phone secrets are only warnings", async () => {
+  it("a missing Anthropic key is a failure with the exact command; the optional harness token is not checked", async () => {
     const r = await run({ ...healthy(), secrets: [] });
     expect(find(r, "ANTHROPIC_API_KEY")).toMatchObject({ level: "fail", fix: "node scripts/secrets.mjs set ANTHROPIC_API_KEY" });
-    expect(find(r, "NTFY_TOPIC")?.level).toBe("warn");
-    expect(find(r, "APPROVAL_SIGNING_KEY")?.level).toBe("warn");
+    expect(find(r, "HARNESS_TOKEN")).toBeUndefined();
   });
 
   it("missing labels fail with the create command", async () => {
@@ -105,7 +104,7 @@ describe("doctor", () => {
     expect(find(r, "ai-guardrails.yml")?.level).toBe("warn");
   });
 
-  it("warns when runs are not named, because the dashboard cannot link them", async () => {
+  it("warns when runs are not named, because runs cannot be matched to issues", async () => {
     const w = healthy(); w.files[".github/workflows/ai-fix.yml"] = "name: AI fix\n";
     expect(find(await run(w), "does not name its runs")?.level).toBe("warn");
   });
@@ -150,24 +149,15 @@ describe("doctor", () => {
     expect(find(r, "not answering")?.level).toBe("fail");
   });
 
-  it("fails loudly if the dashboard data route answers WITHOUT a login", async () => {
-    const r = find(await run({ ...healthy(), dashboard: 200 }), "dashboard route is not behaving");
-    expect(r?.level).toBe("fail");
-    expect(r?.detail).toContain("expected 401");
+  it("reports missing Worker secrets with the one-command fix", async () => {
+    const r = await run({ ...healthy(), workerSecrets: ["TRIAGE_LLM_KEY"] });
+    expect(find(r, "GITHUB_TOKEN")).toMatchObject({ level: "fail", fix: "node scripts/secrets.mjs set WORKER_GITHUB_TOKEN" });
+    expect(find(r, "TRIAGE_LLM_KEY")?.level).toBe("pass");
   });
 
-  it("reports missing Worker secrets: required ones fail, the dashboard passphrase warns", async () => {
-    const r = await run({ ...healthy(), workerSecrets: ["SIGNING_KEY"] });
-    expect(r).toBeTruthy();
-    expect(find(r, "GITHUB_TOKEN")?.level).toBe("fail");
-    expect(find(r, "DASHBOARD_PASS")?.level).toBe("warn");
-    expect(find(r, "DASHBOARD_PASS")?.fix).toBe("node scripts/secrets.mjs set WORKER_DASHBOARD_PASS");
-    expect(find(r, "SIGNING_KEY")?.level).toBe("pass");
-  });
-
-  it("warns when intake has no triage key, with the one-command fix", async () => {
+  it("fails when intake has no triage key, with the one-command fix", async () => {
     const r = find(await run({ ...healthy(), workerSecrets: workerSecrets.filter((n) => n !== "TRIAGE_LLM_KEY") }), "TRIAGE_LLM_KEY");
-    expect(r).toMatchObject({ level: "warn", fix: "node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY" });
+    expect(r).toMatchObject({ level: "fail", fix: "node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY" });
   });
 
   it("catches a Worker version that was uploaded but never made live", async () => {
@@ -179,7 +169,7 @@ describe("doctor", () => {
   it("fails when the repo is not in the Worker's allowlist", async () => {
     const r = find(await run({ ...healthy(), toml: 'ALLOWED_REPOS = "someone/else"' }), "not in the Worker's ALLOWED_REPOS");
     expect(r?.level).toBe("fail");
-    expect(r?.detail).toContain("403");
+    expect(r?.detail).toContain("refused");
   });
 
   it("degrades to a warning when wrangler cannot be used", async () => {

@@ -1,13 +1,6 @@
-// How each kind of key is produced: generated, or typed (hidden) and checked before it is stored.
+// How a key is produced: typed (hidden) and checked before it is stored.
 // A recipe returns { value } or { error }. Nothing here prints or stores a key.
 import { checkAnthropicKey } from "./check-anthropic.mjs";
-
-const hex = (bytes) => [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
-
-export async function generateVapid() {
-  const { privateKey } = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
-  return JSON.stringify(await crypto.subtle.exportKey("jwk", privateKey));
-}
 
 /** Each validator gets the typed value and returns null when fine, or a plain-words reason. */
 export const VALIDATORS = {
@@ -63,23 +56,10 @@ export const VALIDATORS = {
  * Produce the value for one secret. `ask` is injected so this stays testable:
  *   ask(question) -> hidden typed text.
  */
-export async function runRecipe(recipe, { ask, ctx = {}, hashPassphrase }) {
-  switch (recipe.kind) {
-    case "random-hex": return { value: hex(recipe.bytes ?? 32), generated: true };
-    case "topic": return { value: `${recipe.prefix}-${hex(12)}`, generated: true };
-    case "vapid": return { value: await generateVapid(), generated: true };
-    case "passphrase": {
-      const a = await ask("Choose a passphrase (at least 10 characters, nothing is shown): ");
-      if (a.length < 10) return { error: "Too short. Use at least 10 characters, for example four random words." };
-      if (a !== (await ask("Type it again: "))) return { error: "They did not match. Nothing was saved." };
-      return { value: await hashPassphrase(a) };
-    }
-    case "prompt": {
-      const v = (await ask("Paste the value (nothing is shown): ")).trim();
-      if (!v) return { error: "Nothing was entered." };
-      const problem = await VALIDATORS[recipe.validate ?? "min-length"]?.(v, ctx);
-      return problem ? { error: `${problem}\nNothing was saved.` } : { value: v };
-    }
-    default: return { error: `Unknown recipe '${recipe.kind}'.` };
-  }
+export async function runRecipe(recipe, { ask, ctx = {} }) {
+  if (recipe.kind !== "prompt") return { error: `Unknown recipe '${recipe.kind}'.` };
+  const v = (await ask("Paste the value (nothing is shown): ")).trim();
+  if (!v) return { error: "Nothing was entered." };
+  const problem = await VALIDATORS[recipe.validate ?? "min-length"]?.(v, ctx);
+  return problem ? { error: `${problem}\nNothing was saved.` } : { value: v };
 }

@@ -7,11 +7,6 @@ compatibility_date = "2026-11-01"
 [observability]
 enabled = true
 
-# Static files (the push test page, its service worker, manifest and icons) served from ./public.
-# Requests that match no file fall through to the Worker code.
-[assets]
-directory = "./public"
-
 [vars]
 # Comma-separated owner/repo list this Worker may act on.
 ALLOWED_REPOS = "kirnh/MediSync"
@@ -23,18 +18,13 @@ PROJECTS = '{"medisync":{"repo":"kirnh/MediSync","name":"MediSync"}}'
 TRIAGE_PROVIDER = "anthropic"
 TRIAGE_MODEL = "claude-haiku-5-5"
 
-# Single-use record for approval links, and scratch space for the push test.
+# Rate-limit counters and the short-lived status of each feedback message.
 # Create with: npx wrangler kv namespace create USED, then paste the printed id below.
 [[kv_namespaces]]
 binding = "USED"
 id = "781b6074f62f481a901c1b9e2ed46c91"
 
-# Secrets (set with `npx wrangler secret put <NAME>`, never committed):
-#   SIGNING_KEY          shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo
-#   GITHUB_TOKEN         fine-grained token, Issues read/write on the allowed repos
-#   NTFY_PROGRESS_TOPIC  ntfy topic for acknowledgements (optional)
-#   TRIAGE_LLM_KEY       API key for the triage model
-#   VAPID_PRIVATE_JWK    web push signing key (push test only)
-# Do not set these by hand. Every key is kept in GitHub secrets and copied here by the deploy-worker workflow:
+# Secrets are kept in GitHub and copied here by the deploy-worker workflow; do not set them by hand:
+#   GITHUB_TOKEN     fine-grained token, Issues read/write on the allowed repos
+#   TRIAGE_LLM_KEY   API key for the triage model
 #   node scripts/secrets.mjs list     (what exists, where, and what each is for)
-#   node scripts/secrets.mjs set <ID>

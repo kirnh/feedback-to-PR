@@ -71,7 +71,7 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
   const secretNames = (gh("secret", "list", "-R", repo, "--json", "name").stdout.match(/"name":"([^"]+)"/g) ?? []).map((s) => s.slice(8, -1));
   for (const s of manifest.secrets.filter((x) => x.scope === "app" && !x.quiet)) {
     const why = s.what.split(". ")[0] + ".";
-    const fix = `node scripts/secrets.mjs set ${s.derivedFrom ?? s.id}`;
+    const fix = `node scripts/secrets.mjs set ${s.id}`;
     if (secretNames.includes(s.id)) out.push(pass(`Repo secret ${s.id} is set`));
     else out.push((s.required ? fail : warn)(`Repo secret ${s.id} is missing`, why, fix));
   }
@@ -84,7 +84,7 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
 
   // ---- Workflow files on the default branch -------------------------------
   const file = (path) => { const r = gh("api", `repos/${repo}/contents/${path}?ref=${branch}`, "-H", "Accept: application/vnd.github.raw+json"); return r.code === 0 ? r.stdout : null; };
-  const wf = { "ai-fix.yml": "fail", "ai-guardrails.yml": "warn", "ai-approval-notify.yml": "warn", "ai-doctor.yml": "warn" };
+  const wf = { "ai-fix.yml": "fail", "ai-ready.yml": "warn", "ai-guardrails.yml": "warn", "ai-doctor.yml": "warn" };
   const bodies = {};
   for (const [name, level] of Object.entries(wf)) {
     bodies[name] = file(`.github/workflows/${name}`);
@@ -95,7 +95,7 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
     }
   }
   if (bodies["ai-fix.yml"] && !/^run-name:\s*["'][^"']*#\$\{\{[^"']*["']\s*$/m.test(bodies["ai-fix.yml"]))
-    out.push(warn("ai-fix.yml does not name its runs with the issue number", "The dashboard cannot link runs to issues. (An unquoted `#` is read by YAML as a comment, so the number is silently dropped.)", 'Under `name: AI fix` use exactly:  run-name: "AI fix #${{ github.event.issue.number }}"'));
+    out.push(warn("ai-fix.yml does not name its runs with the issue number", "Runs cannot be matched to their issue by name. (An unquoted `#` is read by YAML as a comment, so the number is silently dropped.)", 'Under `name: AI fix` use exactly:  run-name: "AI fix #${{ github.event.issue.number }}"'));
 
   // ---- harness.config.yml -------------------------------------------------
   const cfg = file("harness.config.yml");
@@ -120,8 +120,6 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
     if (health.status !== 200) out.push(fail("The Worker is not answering", `GET ${worker}/v1/health returned ${health.status || health.error}.`, "cd server && npx wrangler deploy"));
     else {
       out.push(pass("The Worker answers /v1/health"));
-      const dash = await fetchJson(`${worker}/v1/dashboard`);
-      out.push(dash.status === 401 ? pass("The dashboard route is live (sign-in required)") : fail("The dashboard route is not behaving", `GET /v1/dashboard returned ${dash.status}, expected 401.`, "cd server && npx wrangler deploy"));
     }
 
     const serverDir = join(harnessDir, "server");
@@ -149,12 +147,12 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
       const tomlPath = join(serverDir, "wrangler.toml");
       if (fileExists(tomlPath)) {
         const allowed = (/ALLOWED_REPOS\s*=\s*"([^"]*)"/.exec(readFile(tomlPath))?.[1] ?? "").split(",").map((s) => s.trim());
-        allowed.includes(repo) ? out.push(pass(`${repo} is in the Worker's ALLOWED_REPOS`)) : out.push(fail(`${repo} is not in the Worker's ALLOWED_REPOS`, "Approval taps for this repo will be refused (403).", "Add it to ALLOWED_REPOS in server/wrangler.toml, then: cd server && npx wrangler deploy"));
+        allowed.includes(repo) ? out.push(pass(`${repo} is in the Worker's ALLOWED_REPOS`)) : out.push(fail(`${repo} is not in the Worker's ALLOWED_REPOS`, "Feedback for this repo will be refused.", "Add it to ALLOWED_REPOS in server/wrangler.toml, then: cd server && npx wrangler deploy"));
       }
     }
   }
 
-  out.push({ level: "info", title: "Not checkable from here", detail: "The Worker's GitHub token (permissions and expiry): sign in to the dashboard; its Problems strip checks both. `node scripts/secrets.mjs list` also warns as it nears expiry." });
+  out.push({ level: "info", title: "Not checkable from here", detail: "The Worker's GitHub token (permissions and expiry). `node scripts/secrets.mjs list` warns as it nears expiry; `node scripts/send-test-feedback.mjs` proves it can file issues." });
 
   // ---- Remote: the repo's own Anthropic key ------------------------------
   if (remote) {

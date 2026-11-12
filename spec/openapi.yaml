@@ -4,8 +4,9 @@ info:
   version: 0.1.0
   description: |
     Beta testers send feedback from inside an app. The service rewrites it into a short, anonymous,
-    scoped GitHub issue and keeps the original text off GitHub. Authentication is a beta code that the
-    app's owner hands to each tester; it is bound to one project.
+    scoped GitHub issue and keeps the original text off GitHub. The app names its project in the
+    `X-Project` header. There is no login: abuse is bounded by per-device and per-project daily limits,
+    and nothing runs until the owner approves the issue on GitHub.
 servers:
   - url: https://feedback-to-pr.feedback-to-pr-server.workers.dev
 paths:
@@ -21,8 +22,8 @@ paths:
         Returns immediately with an id. The message is triaged in the background; poll
         `GET /v1/feedback/{id}` for the outcome. Send the same `Idempotency-Key` when retrying so the
         same message is never filed twice.
-      security: [{ betaCode: [] }]
       parameters:
+        - { name: X-Project, in: header, required: true, schema: { type: string } }
         - { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 64 } }
       requestBody:
         required: true
@@ -35,25 +36,19 @@ paths:
       responses:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/FeedbackAccepted" } } } }
         "400": { $ref: "#/components/responses/Error" }
-        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
   /v1/feedback/{id}:
     get:
       summary: Outcome of one piece of feedback
-      description: Only the tester who sent it can read it. The GitHub issue is not revealed to testers.
-      security: [{ betaCode: [] }]
+      description: The id is random and only valid for the project named in `X-Project`. The GitHub issue is not revealed.
       parameters:
+        - { name: X-Project, in: header, required: true, schema: { type: string } }
         - { name: id, in: path, required: true, schema: { type: string, pattern: "^fb_[0-9a-f]{12}$" } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeedbackStatus" } } } }
-        "401": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
 components:
-  securitySchemes:
-    betaCode:
-      type: http
-      scheme: bearer
-      description: A beta code (`f2pr_b1.<payload>.<signature>`) issued by the app owner. Bound to one project, expires, and can be revoked.
   schemas:
     FeedbackRequest:
       type: object
@@ -88,7 +83,7 @@ components:
           enum: [received, triaged, duplicate, rejected, failed]
           description: |
             received: queued. triaged: became a new issue. duplicate: matched an existing report.
-            rejected: not actionable (spam, empty, abusive). failed: could not be processed; the owner is notified on the dashboard.
+            rejected: not actionable (spam, empty, abusive). failed: could not be processed; the reason is in the Worker logs.
     Error:
       type: object
       required: [error]

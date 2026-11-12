@@ -40,12 +40,6 @@ on:
       HARNESS_TOKEN:
         description: Only needed if the harness repo is private
         required: false
-      NTFY_TOPIC:
-        description: ntfy topic for "needs you" messages (PR ready, failures)
-        required: false
-      NTFY_PROGRESS_TOPIC:
-        description: ntfy topic for low-priority progress messages
-        required: false
 
 jobs:
   fix:
@@ -93,7 +87,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # Fail fast, with the real reason, if the agent could not run at all (key, model, credit, quota).
-      # Everything after it is skipped when this fails (no install, no checks); the trace, the issue comment and the phone message still say why.
+      # Everything after it is skipped when this fails (no install, no checks); the trace and the issue comment still say why.
       - name: Preflight (API key, model, credit)
         id: preflight
         if: steps.cfg.outputs.runner == 'claude-code'
@@ -300,20 +294,14 @@ jobs:
           bash .harness/scripts/write-trace.sh
           gh issue comment "$ISSUE" --body-file /tmp/trace.md || true
 
-      # Tell the owner how it went (PR ready / no changes / failed). Needs-you goes to one topic,
-      # low-priority progress to another. Skipped quietly when no topics are configured.
-      - name: Notify owner
+      # One short comment that @-mentions the owner, so GitHub's own notification says how it went.
+      - name: Tell the owner
         if: always()
         env:
-          TOPIC_ACT: ${{ secrets.NTFY_TOPIC }}
-          TOPIC_PRG: ${{ secrets.NTFY_PROGRESS_TOPIC }}
-          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
           ISSUE: ${{ inputs.issue_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          ISSUE_URL: ${{ github.server_url }}/${{ github.repository }}/issues/${{ inputs.issue_number }}
-          MODEL: ${{ steps.cfg.outputs.model }}
-          AGENT_OUTCOME: ${{ steps.agent.outcome || steps.aider.outcome || 'skipped' }}
-        run: bash .harness/scripts/notify-result.sh
+        run: bash .harness/scripts/tell-owner.sh
 
       - name: Attach trace to the run
         if: always()

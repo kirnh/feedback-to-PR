@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { storedPassphrase as _unused } from "../scripts/lib/passphrase-hash.mjs";
-import { makeSession } from "../src/dashboard/auth";
-import { mintBetaCode, verifyBetaCode } from "../src/feedback/beta";
 import { DEFAULT_TRIAGE_MODEL, LlmError, makeLlm } from "../src/feedback/llm";
 import { cleanText, oneLine } from "../src/feedback/sanitize";
 import { buildPrompt, parseTriage, TRIAGE_SYSTEM, triage, TriageError } from "../src/feedback/triage";
-import { sign } from "../src/token";
 
-void _unused;
 const KEY = "signing-key-for-tests-0123456789";
 const NOW = 1_800_000_000;
 
@@ -35,31 +30,6 @@ describe("cleanText: tester text is untrusted", () => {
   it("keeps ordinary feedback intact", () => {
     const msg = "The snooze button on the Alarms screen is too small, I miss it every morning.";
     expect(cleanText(msg, 500)).toBe(msg);
-  });
-});
-
-describe("beta codes", () => {
-  const payload = { p: "app", t: "asha", e: NOW + 600, n: "nonce-12345678" };
-  it("round-trips", async () => {
-    const r = await verifyBetaCode(await mintBetaCode(payload, KEY), KEY, NOW);
-    expect(r).toEqual({ ok: true, payload });
-  });
-  it("rejects expired, wrong key, tampered and malformed codes", async () => {
-    const code = await mintBetaCode(payload, KEY);
-    expect(await verifyBetaCode(await mintBetaCode({ ...payload, e: NOW - 1 }, KEY), KEY, NOW)).toEqual({ ok: false, reason: "expired" });
-    expect(await verifyBetaCode(code, "other-key", NOW)).toEqual({ ok: false, reason: "bad_signature" });
-    const [pre, , sig] = code.split(".");
-    const forged = btoa(JSON.stringify({ ...payload, p: "other", e: NOW + 99999 })).replace(/=+$/, "");
-    expect((await verifyBetaCode(`${pre}.${forged}.${sig}`, KEY, NOW)).ok).toBe(false);
-    for (const bad of ["", "abc", "a.b.c", "f2pr_b1..", "f2pr_b1.x", "wrong.x.y"]) expect((await verifyBetaCode(bad, KEY, NOW)).ok).toBe(false);
-  });
-  it("a project id with odd characters is refused even when correctly signed", async () => {
-    expect((await verifyBetaCode(await mintBetaCode({ ...payload, p: "../etc" }, KEY), KEY, NOW)).ok).toBe(false);
-  });
-  it("is not interchangeable with approval links or dashboard sessions (separate signing domains)", async () => {
-    const approval = await sign({ r: "o/r", i: 1, a: "approve", e: NOW + 60, n: "nonce-12345678" }, KEY);
-    expect((await verifyBetaCode(approval, KEY, NOW)).ok).toBe(false);
-    expect((await verifyBetaCode(`f2pr_b1.${(await makeSession(KEY, NOW))}`, KEY, NOW)).ok).toBe(false);
   });
 });
 

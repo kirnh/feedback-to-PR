@@ -9,7 +9,7 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 
 mkdir -p "$target/.github/workflows"
 
-for f in ai-fix ai-guardrails ai-approval-notify ai-doctor; do
+for f in ai-fix ai-ready ai-guardrails ai-doctor; do
   dest="$target/.github/workflows/$f.yml"
   if [ -e "$dest" ]; then echo "skip   $dest (exists)"; continue; fi
   sed "s#OWNER/#$owner/#" "$here/templates/$f.yml" > "$dest"
@@ -28,6 +28,6 @@ cat <<EOF
 Next steps in the app repo on GitHub:
   1. Settings > Secrets > Actions: add ANTHROPIC_API_KEY
   2. Settings > Actions > General: allow Actions to create pull requests
-  3. Create labels: ai-fix, ai-triaged
+  3. Create labels: ai-triaged, ai-fix (you add ai-fix yourself to approve a fix)
   4. Branch protection on main: require CI + 1 approval
 EOF

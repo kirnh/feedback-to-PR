@@ -1,13 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { storedPassphrase } from "../scripts/lib/passphrase-hash.mjs";
 import { cleanTyped } from "../../scripts/lib/ask-hidden.mjs";
-import { generateVapid, runRecipe, VALIDATORS } from "../../scripts/lib/recipes.mjs";
+import { runRecipe, VALIDATORS } from "../../scripts/lib/recipes.mjs";
 import { buildInventory, loadManifest, renderDoc, renderInventory, setSecret, storesFor, type Facts, type Manifest } from "../../scripts/secrets.mjs";
 import { planSync, syncSecrets } from "../../scripts/sync-secrets.mjs";
-import { checkPassphrase } from "../src/dashboard/auth";
-import { vapidFromJwk } from "../src/push";
 
 const root = new URL("../../", import.meta.url).pathname;
 const manifest = loadManifest(root);
@@ -33,13 +30,8 @@ describe("secrets.manifest.json stays honest", () => {
       expect(code, `${s.id} -> ${s.workerName}`).toContain(s.workerName!);
     }
   });
-  it("copies are tied to a source that sets them, and everything else has a way to be set", () => {
-    for (const s of manifest.secrets.filter((x) => x.derivedFrom)) {
-      const src = manifest.secrets.find((x) => x.id === s.derivedFrom)!;
-      expect(src, s.id).toBeTruthy();
-      expect(src.alsoSetInApps, s.id).toBe(s.id);
-    }
-    for (const s of manifest.secrets.filter((x) => !x.derivedFrom)) expect(s.recipe, s.id).toBeTruthy();
+  it("every key has a way to be set", () => {
+    for (const s of manifest.secrets) expect(s.recipe?.kind, s.id).toBe("prompt");
   });
   it("the apps listed are allowed by the Worker", () => {
     const allowed = /ALLOWED_REPOS\s*=\s*"([^"]*)"/.exec(readFileSync(join(root, "server/wrangler.toml"), "utf8"))![1].split(",").map((s) => s.trim());
@@ -63,33 +55,15 @@ describe("secrets.manifest.json stays honest", () => {
 });
 
 describe("recipes", () => {
-  const hash = storedPassphrase;
-  const noAsk = async () => { throw new Error("should not ask"); };
-  it("generated keys are random, the right shape, and never ask you anything", async () => {
-    const a = await runRecipe({ kind: "random-hex", bytes: 32 }, { ask: noAsk, hashPassphrase: hash });
-    const b = await runRecipe({ kind: "random-hex", bytes: 32 }, { ask: noAsk, hashPassphrase: hash });
-    expect(a.value).toMatch(/^[0-9a-f]{64}$/);
-    expect(a.value).not.toBe(b.value);
-    expect((await runRecipe({ kind: "topic", prefix: "medisync-progress" }, { ask: noAsk, hashPassphrase: hash })).value).toMatch(/^medisync-progress-[0-9a-f]{24}$/);
-  });
-  it("the generated web-push key is accepted by the Worker", async () => {
-    expect(vapidFromJwk(await generateVapid())).not.toBeNull();
-  });
-  it("a passphrase is asked for twice, must match, and is stored as a hash the Worker accepts", async () => {
-    const answers = ["four random words", "four random words"];
-    const r = await runRecipe({ kind: "passphrase" }, { ask: async () => answers.shift()!, hashPassphrase: hash });
-    expect(r.value).not.toContain("random");
-    expect(await checkPassphrase("four random words", r.value)).toBe(true);
-    const mismatch = ["four random words", "different words here"];
-    expect((await runRecipe({ kind: "passphrase" }, { ask: async () => mismatch.shift()!, hashPassphrase: hash })).error).toContain("did not match");
-    expect((await runRecipe({ kind: "passphrase" }, { ask: async () => "short", hashPassphrase: hash })).error).toContain("Too short");
+  it("an unknown kind of recipe is refused", async () => {
+    expect((await runRecipe({ kind: "random-hex" }, { ask: async () => "x" })).error).toContain("Unknown recipe");
   });
   it("a typed key is trimmed, checked, and refused (with 'Nothing was saved') when the check fails", async () => {
-    const ok = await runRecipe({ kind: "prompt", validate: "min-length" }, { ask: async () => "  a-long-enough-topic-name  ", hashPassphrase: hash });
+    const ok = await runRecipe({ kind: "prompt", validate: "min-length" }, { ask: async () => "  a-long-enough-topic-name  " });
     expect(ok.value).toBe("a-long-enough-topic-name");
-    const bad = await runRecipe({ kind: "prompt", validate: "min-length" }, { ask: async () => "short", hashPassphrase: hash });
+    const bad = await runRecipe({ kind: "prompt", validate: "min-length" }, { ask: async () => "short" });
     expect(bad.error).toContain("Nothing was saved");
-    expect((await runRecipe({ kind: "prompt" }, { ask: async () => "   ", hashPassphrase: hash })).error).toBe("Nothing was entered.");
+    expect((await runRecipe({ kind: "prompt" }, { ask: async () => "   " })).error).toBe("Nothing was entered.");
   });
   it("validators give plain reasons", async () => {
     const respond = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
@@ -147,43 +121,41 @@ describe("hidden input: invisible paste markers cannot corrupt a key", () => {
 });
 
 describe("sync to Cloudflare never blanks a working key", () => {
-  const all = { WORKER_SIGNING_KEY: "sig-value", WORKER_GITHUB_TOKEN: "", ANTHROPIC_API_KEY: "app-only-value", CLOUDFLARE_API_TOKEN: "cf-value" };
+  const all = { WORKER_TRIAGE_LLM_KEY: "triage-value", WORKER_GITHUB_TOKEN: "", ANTHROPIC_API_KEY: "app-only-value", CLOUDFLARE_API_TOKEN: "cf-value" };
   it("copies only worker keys that exist and are not empty", () => {
     const p = planSync(manifest, all);
-    expect(p.push).toEqual([{ github: "WORKER_SIGNING_KEY", worker: "SIGNING_KEY" }]);
+    expect(p.push).toEqual([{ github: "WORKER_TRIAGE_LLM_KEY", worker: "TRIAGE_LLM_KEY" }]);
     expect(p.skip.map((s) => s.worker)).toContain("GITHUB_TOKEN"); // empty in GitHub: left alone in Cloudflare
-    expect(p.skip.map((s) => s.worker)).toContain("DASHBOARD_PASS"); // absent in GitHub: left alone
   });
   it("never copies app keys or the deploy token to the Worker", async () => {
     const pushedNames: string[] = [];
     await syncSecrets({ manifest, allSecrets: all, put: async (n) => { pushedNames.push(n); return true; } });
-    expect(pushedNames).toEqual(["SIGNING_KEY"]);
+    expect(pushedNames).toEqual(["TRIAGE_LLM_KEY"]);
   });
   it("reports failures by name and the result never contains a value", async () => {
-    const r = await syncSecrets({ manifest, allSecrets: { WORKER_SIGNING_KEY: "sig-value", WORKER_DASHBOARD_PASS: "hash-value" }, put: async (n) => n !== "DASHBOARD_PASS" });
-    expect(r.failed).toEqual(["DASHBOARD_PASS"]);
-    expect(r.pushed).toEqual(["SIGNING_KEY"]);
-    expect(JSON.stringify(r)).not.toMatch(/sig-value|hash-value/);
+    const r = await syncSecrets({ manifest, allSecrets: { WORKER_TRIAGE_LLM_KEY: "triage-value", WORKER_GITHUB_TOKEN: "token-value" }, put: async (n) => n !== "GITHUB_TOKEN" });
+    expect(r.failed).toEqual(["GITHUB_TOKEN"]);
+    expect(r.pushed).toEqual(["TRIAGE_LLM_KEY"]);
+    expect(JSON.stringify(r)).not.toMatch(/triage-value|token-value/);
   });
 });
 
 describe("list: one place to see everything", () => {
   const name = (...n: string[]) => n.map((x) => ({ name: x, updatedAt: "2026-11-11T00:00:00Z" }));
-  const facts = (over: Partial<Facts> = {}): Facts => ({ harness: name("CLOUDFLARE_API_TOKEN", "WORKER_SIGNING_KEY"), apps: { "kirnh/MediSync": name("ANTHROPIC_API_KEY", "NTFY_TOPIC", "APPROVAL_SIGNING_KEY") }, worker: ["SIGNING_KEY", "GITHUB_TOKEN"], ...over });
+  const facts = (over: Partial<Facts> = {}): Facts => ({ harness: name("CLOUDFLARE_API_TOKEN", "WORKER_TRIAGE_LLM_KEY"), apps: { "kirnh/MediSync": name("ANTHROPIC_API_KEY") }, worker: ["TRIAGE_LLM_KEY", "GITHUB_TOKEN"], ...over });
   const status = (rows: ReturnType<typeof buildInventory>, id: string) => rows.find((r) => r.id === id)!.status;
 
   it("tells apart set, waiting for deploy, only-in-Cloudflare and missing", () => {
-    const rows = buildInventory(manifest, facts({ worker: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS"] }), NOW);
+    const rows = buildInventory(manifest, facts(), NOW);
     expect(status(rows, "CLOUDFLARE_API_TOKEN")).toBe("set");
-    expect(status(rows, "WORKER_SIGNING_KEY")).toBe("set");
+    expect(status(rows, "WORKER_TRIAGE_LLM_KEY")).toBe("set");
     expect(status(rows, "WORKER_GITHUB_TOKEN")).toBe("legacy"); // in Cloudflare only
-    expect(status(rows, "WORKER_DASHBOARD_PASS")).toBe("legacy");
-    expect(status(rows, "WORKER_TRIAGE_LLM_KEY")).toBe("missing");
     const waiting = buildInventory(manifest, facts({ worker: ["GITHUB_TOKEN"] }), NOW);
-    expect(status(waiting, "WORKER_SIGNING_KEY")).toBe("waiting");
+    expect(status(waiting, "WORKER_TRIAGE_LLM_KEY")).toBe("waiting");
+    expect(status(buildInventory(manifest, facts({ harness: name("CLOUDFLARE_API_TOKEN"), worker: [] }), NOW), "WORKER_TRIAGE_LLM_KEY")).toBe("missing");
   });
   it("an app key missing from one app is reported with the app's name", () => {
-    const rows = buildInventory(manifest, facts({ apps: { "kirnh/MediSync": name("NTFY_TOPIC") } }), NOW);
+    const rows = buildInventory(manifest, facts({ apps: { "kirnh/MediSync": [] } }), NOW);
     const r = rows.find((x) => x.id === "ANTHROPIC_API_KEY")!;
     expect(r.status).toBe("missing");
     expect(r.note).toContain("kirnh/MediSync");
@@ -191,17 +163,17 @@ describe("list: one place to see everything", () => {
   it("warns before a token that was meant to expire does, and when it likely has", () => {
     const aged = (days: number) => buildInventory(manifest, { ...facts({ worker: ["GITHUB_TOKEN"] }), harness: [{ name: "WORKER_GITHUB_TOKEN", updatedAt: new Date(NOW - days * 86_400_000).toISOString() }] }, NOW);
     expect(status(aged(1), "WORKER_GITHUB_TOKEN")).toBe("set");
-    expect(status(aged(5), "WORKER_GITHUB_TOKEN")).toBe("expiring");
-    expect(status(aged(8), "WORKER_GITHUB_TOKEN")).toBe("expired?");
+    expect(status(aged(29), "WORKER_GITHUB_TOKEN")).toBe("expiring");
+    expect(status(aged(31), "WORKER_GITHUB_TOKEN")).toBe("expired?");
   });
   it("works when Cloudflare cannot be read (status unknown, not 'missing')", () => {
-    expect(status(buildInventory(manifest, facts({ worker: null }), NOW), "WORKER_SIGNING_KEY")).toBe("set");
+    expect(status(buildInventory(manifest, facts({ worker: null }), NOW), "WORKER_TRIAGE_LLM_KEY")).toBe("set");
   });
   it("the printed report explains each key, says what needs doing, and shows no values", () => {
     const text = renderInventory(buildInventory(manifest, facts(), NOW));
     expect(text).toContain("Used by:");
     expect(text).toContain("Run: node scripts/secrets.mjs setup");
-    expect(text).toMatch(/MISSING\s+WORKER_DASHBOARD_PASS|legacy\s+WORKER_DASHBOARD_PASS|MISSING\s+WORKER_GITHUB_TOKEN|legacy\s+WORKER_GITHUB_TOKEN/);
+    expect(text).toMatch(/legacy\s+WORKER_GITHUB_TOKEN/);
   });
 });
 
@@ -214,56 +186,40 @@ describe("set: stores in the right places, prints nothing secret", () => {
       if (over.ghFails && args.join(" ").includes(over.ghFails)) return { code: 1, stdout: "", stderr: "x" };
       return { code: 0, stdout: "", stderr: "" };
     };
-    return { calls, said, deps: (ask: (q: string) => Promise<string> = async () => { throw new Error("no ask"); }) => ({ sh, ask, hashPassphrase: storedPassphrase, say: (m: string) => said.push(m), root }) };
+    return { calls, said, deps: (ask: (q: string) => Promise<string> = async () => { throw new Error("no ask"); }) => ({ sh, ask, say: (m: string) => said.push(m), root }) };
   }
 
-  it("the signing key is generated once and written to the harness repo AND to every app, as the same value", async () => {
+  it("a Worker key goes to the harness repo and triggers a deploy; the value is never printed or returned", async () => {
     const w = world();
-    const r = await setSecret(manifest, "WORKER_SIGNING_KEY", w.deps());
+    const r = await setSecret(manifest, "WORKER_TRIAGE_LLM_KEY", { ...w.deps(async () => "sk-ant-" + "x".repeat(30)), fetch: (async () => new Response("{}", { status: 200 })) as typeof fetch });
     expect(r.ok).toBe(true);
     expect(r.needsDeploy).toBe(true);
     const sets = w.calls.filter((c) => c.cmd === "gh" && c.args[0] === "secret");
-    expect(sets.map((c) => `${c.args[2]} ${c.args[4]}`)).toEqual(["WORKER_SIGNING_KEY kirnh/feedback-to-PR", "APPROVAL_SIGNING_KEY kirnh/MediSync"]);
-    expect(new Set(sets.map((c) => c.input)).size).toBe(1);
-    expect(sets[0].input).toMatch(/^[0-9a-f]{64}$/);
-  });
-  it("the value is never printed or returned", async () => {
-    const w = world();
-    const r = await setSecret(manifest, "WORKER_SIGNING_KEY", w.deps());
-    const value = w.calls.find((c) => c.args[0] === "secret")!.input!;
-    expect(JSON.stringify([r, w.said])).not.toContain(value);
+    expect(sets.map((c) => `${c.args[2]} ${c.args[4]}`)).toEqual(["WORKER_TRIAGE_LLM_KEY kirnh/feedback-to-PR"]);
+    expect(JSON.stringify([r, w.said])).not.toContain(sets[0].input!);
   });
   it("an app key goes to the app repos only, and does not trigger a Cloudflare deploy", async () => {
     const w = world();
-    const r = await setSecret(manifest, "NTFY_TOPIC", w.deps(async () => "a-long-private-topic-name"));
+    const r = await setSecret(manifest, "HARNESS_TOKEN", w.deps(async () => "a-long-enough-token-value"));
     expect(w.calls.map((c) => c.args[4])).toEqual(["kirnh/MediSync"]);
     expect(r.needsDeploy).toBe(false);
   });
   it("a refused check stores nothing at all", async () => {
     const w = world();
-    const r = await setSecret(manifest, "NTFY_TOPIC", w.deps(async () => "short"));
+    const r = await setSecret(manifest, "HARNESS_TOKEN", w.deps(async () => "short"));
     expect(r.ok).toBe(false);
     expect(w.calls).toHaveLength(0);
   });
-  it("copies cannot be set directly; unknown names are explained", async () => {
+  it("unknown names are explained and store nothing", async () => {
     const w = world();
-    expect((await setSecret(manifest, "APPROVAL_SIGNING_KEY", w.deps())).message).toContain("Set WORKER_SIGNING_KEY instead");
     expect((await setSecret(manifest, "NOPE", w.deps())).message).toContain("Unknown key");
     expect(w.calls).toHaveLength(0);
   });
-  it("a GitHub failure stops and says what was already stored", async () => {
-    const w = world({ ghFails: "APPROVAL_SIGNING_KEY" });
-    const r = await setSecret(manifest, "WORKER_SIGNING_KEY", w.deps());
+  it("a GitHub failure stops and says nothing was stored", async () => {
+    const w = world({ ghFails: "HARNESS_TOKEN" });
+    const r = await setSecret(manifest, "HARNESS_TOKEN", w.deps(async () => "a-long-enough-token-value"));
     expect(r.ok).toBe(false);
-    expect(r.message).toContain("WORKER_SIGNING_KEY in kirnh/feedback-to-PR");
-  });
-  it("a generated phone topic goes to the clipboard, not to the screen", async () => {
-    const w = world();
-    await setSecret(manifest, "WORKER_NTFY_PROGRESS_TOPIC", w.deps());
-    const topic = w.calls.find((c) => c.args[0] === "secret")!.input!;
-    expect(w.calls.some((c) => c.cmd === "pbcopy" && c.input === topic)).toBe(true);
-    expect(w.said.join("\n")).toContain("clipboard");
-    expect(w.said.join("\n")).not.toContain(topic);
+    expect(r.message).toContain("nothing");
   });
   it("storesFor: worker keys live in the harness repo, app keys in each app", () => {
     const s = (id: string) => storesFor(manifest as Manifest, manifest.secrets.find((x) => x.id === id)!);

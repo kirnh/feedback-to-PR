@@ -6,7 +6,8 @@ on:
 
 jobs:
   fix:
-    if: github.event.label.name == 'ai-fix'
+    # Only the repo owner can approve: the label counts only when the owner added it.
+    if: github.event.label.name == 'ai-fix' && github.actor == github.repository_owner
     # Change OWNER to the account that holds feedback-to-PR.
     uses: OWNER/feedback-to-PR/.github/workflows/fix-issue.yml@main
     with:
@@ -18,7 +19,4 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      # Optional phone notifications (ntfy): "needs you" and low-priority progress topics.
-      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-      NTFY_PROGRESS_TOPIC: ${{ secrets.NTFY_PROGRESS_TOPIC }}
       # HARNESS_TOKEN: ${{ secrets.HARNESS_TOKEN }}   # only if feedback-to-PR is private
