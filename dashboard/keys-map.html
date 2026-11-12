@@ -1,0 +1,186 @@
+<title>Keys Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left to right, in the order a key lives its life. Where it comes from, where it is kept (one vault), where it is used.
+   A key's dot color says how it is made, so the same key can be followed across all three columns. */
+:root{
+  --bg:#f3f5f3;--surface:#ffffff;--fg:#14201f;--muted:#5a6967;--line:#d6dddb;--soft:#eef1ef;
+  --made:#17704a;--made-bg:#e0f3e8;--web:#a15c07;--web-bg:#fdf0dc;--pick:#1d5fa8;--pick-bg:#e3eefb;--copy:#6b7775;
+  --display:'Bricolage Grotesque','Segoe UI',sans-serif;--body:'Instrument Sans','Segoe UI',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2a3937;--soft:#1b2827;
+  --made:#6fd3a0;--made-bg:#10291e;--web:#f0b062;--web-bg:#2d2113;--pick:#7db6f2;--pick-bg:#12253a;--copy:#9bacaa;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2a3937;--soft:#1b2827;
+  --made:#6fd3a0;--made-bg:#10291e;--web:#f0b062;--web-bg:#2d2113;--pick:#7db6f2;--pick-bg:#12253a;--copy:#9bacaa;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-block:36px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.02em}h2{font-size:21px}h3{font-size:15px}
+p{margin:0}.lede{color:var(--muted);font-size:16px;max-width:64ch;margin-top:8px}
+code{font-family:var(--mono);font-size:12px}
+
+/* the three columns */
+.path{display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1.15fr) 44px minmax(0,1.15fr);gap:0;align-items:start}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.colh{font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:center}
+.colh b{background:var(--fg);color:var(--bg);border-radius:99px;width:20px;height:20px;display:inline-grid;place-items:center;font-size:11px;letter-spacing:0}
+.arrow{align-self:center;text-align:center;color:var(--muted);font-size:22px;line-height:1;padding-top:30px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.arrow small{font:500 10.5px var(--body);color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.02em}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.vault{border:2px solid var(--fg)}
+.card h3{display:flex;align-items:center;gap:8px}
+.note{font-size:13px;color:var(--muted)}
+.key{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;min-width:0}
+.key i{flex:none;width:11px;height:11px;border-radius:50%;margin-top:5px}
+.key.made i{background:var(--made)}.key.web i{background:var(--web)}.key.pick i{background:var(--pick)}.key.copy i{background:transparent;border:2px dashed var(--copy)}
+.key b{font-weight:600}.key small{display:block;font:11px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.shelf{background:var(--soft);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.shelf h4{margin:0;font:600 12.5px var(--body)}.shelf h4 span{font:11px var(--mono);color:var(--muted);font-weight:400}
+.use{border-left:4px solid var(--fg)}
+.use ul{margin:0;padding-left:18px;font-size:13.5px;display:flex;flex-direction:column;gap:3px}
+.use li small{color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13.5px}
+.legend span{display:inline-flex;align-items:center;gap:8px}.legend i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.legend .made{background:var(--made)}.legend .web{background:var(--web)}.legend .pick{background:var(--pick)}.legend .copy{border:2px dashed var(--copy)}
+
+/* journeys */
+.journeys{display:flex;flex-direction:column;gap:18px}
+.jr{display:flex;flex-direction:column;gap:8px}
+.chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0}
+.step{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;margin-right:22px;font-size:13px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.step:last-child{margin-right:0}
+.step:not(:last-child)::after{content:"\2192";position:absolute;right:-20px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:17px}
+.step b{font-size:12px;color:var(--muted);font-family:var(--mono);font-weight:500}
+.step.you{border-top:3px solid var(--web)}.step.auto{border-top:3px solid var(--made)}.step.use2{border-top:3px solid var(--pick)}
+
+/* commands */
+.cmds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.cmd{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.cmd code{background:var(--soft);padding:6px 8px;border-radius:6px;overflow-wrap:anywhere;color:var(--fg)}
+.cmd p{font-size:13.5px;color:var(--muted)}
+
+@media(max-width:860px){
+  .path{grid-template-columns:1fr}
+  .arrow{padding:10px 0;flex-direction:row;justify-content:center}
+  .arrow small{writing-mode:horizontal-tb;transform:none}
+  .arrow span{transform:rotate(90deg)}
+  .chain{grid-template-columns:1fr;gap:20px}
+  .step{margin-right:0}
+  .step:not(:last-child)::after{content:"\2193";right:auto;left:50%;top:auto;bottom:-20px;transform:translateX(-50%)}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Where every key comes from, lives and is used</h1>
+    <p class="lede">There are 11 keys, but they all follow one path: made or fetched once, kept in one vault (GitHub), and copied to the place that uses them. You never touch them by hand. One command does it.</p>
+  </header>
+
+  <div class="legend" aria-label="How a key is made">
+    <span><i class="made"></i>Made for you (you type nothing)</span>
+    <span><i class="web"></i>You copy it from a website</span>
+    <span><i class="pick"></i>You choose it</span>
+    <span><i class="copy"></i>Automatic copy</span>
+  </div>
+
+  <section class="path" aria-label="The path of a key">
+    <!-- 1 -->
+    <div class="col">
+      <div class="colh"><b>1</b>Where it comes from</div>
+      <div class="card"><h3>Made for you</h3>
+        <div class="key made"><i></i><div><b>Signing key</b><small>WORKER_SIGNING_KEY</small></div></div>
+        <div class="key made"><i></i><div><b>Phone progress topic</b><small>WORKER_NTFY_PROGRESS_TOPIC</small></div></div>
+        <div class="key made"><i></i><div><b>Web-push key</b><small>WORKER_VAPID_PRIVATE_JWK</small></div></div>
+        <p class="note">Random. Never shown to you.</p></div>
+      <div class="card"><h3>From a website</h3>
+        <div class="key web"><i></i><div><b>Anthropic key</b> for the agent<small>console.anthropic.com</small></div></div>
+        <div class="key web"><i></i><div><b>Triage AI key</b><small>console.anthropic.com</small></div></div>
+        <div class="key web"><i></i><div><b>Worker's GitHub token</b><small>github.com &gt; Settings &gt; Tokens</small></div></div>
+        <div class="key web"><i></i><div><b>Cloudflare deploy token</b><small>dash.cloudflare.com</small></div></div>
+        <p class="note">Copy it once. It is checked before it is saved.</p></div>
+      <div class="card"><h3>You choose</h3>
+        <div class="key pick"><i></i><div><b>Dashboard passphrase</b><small>saved only as a hash</small></div></div>
+        <div class="key pick"><i></i><div><b>Phone "needs you" topic</b><small>a long name you invent</small></div></div></div>
+    </div>
+
+    <div class="arrow"><span>&rarr;</span><small>one command</small></div>
+
+    <!-- 2 -->
+    <div class="col">
+      <div class="colh"><b>2</b>Where it is kept</div>
+      <div class="card vault"><h3>GitHub secrets: the one vault</h3>
+        <p class="note">GitHub never shows a value back. That is why a key must be entered again if it ever needs replacing.</p>
+        <div class="shelf"><h4>Harness repo <span>kirnh/feedback-to-PR</span></h4>
+          <div class="key web"><i></i><div><b>Cloudflare deploy token</b></div></div>
+          <div class="key made"><i></i><div><b>Signing key</b></div></div>
+          <div class="key web"><i></i><div><b>Worker's GitHub token</b></div></div>
+          <div class="key pick"><i></i><div><b>Dashboard passphrase</b></div></div>
+          <div class="key web"><i></i><div><b>Triage AI key</b></div></div>
+          <div class="key made"><i></i><div><b>Phone progress topic</b></div></div>
+          <div class="key made"><i></i><div><b>Web-push key</b></div></div></div>
+        <div class="shelf"><h4>App repo <span>kirnh/MediSync</span></h4>
+          <div class="key web"><i></i><div><b>Anthropic key</b> for the agent</div></div>
+          <div class="key pick"><i></i><div><b>Phone "needs you" topic</b></div></div>
+          <div class="key copy"><i></i><div><b>Signing key</b> (copy)<small>set together with the original</small></div></div>
+          <div class="key copy"><i></i><div><b>Phone progress topic</b> (copy)<small>set together with the original</small></div></div></div>
+      </div>
+    </div>
+
+    <div class="arrow"><span>&rarr;</span><small>deploy job copies</small></div>
+
+    <!-- 3 -->
+    <div class="col">
+      <div class="colh"><b>3</b>Where it is used</div>
+      <div class="card use"><h3>Deploy job (GitHub)</h3>
+        <ul><li>Cloudflare deploy token <small>- to deploy and to copy the six keys below</small></li></ul></div>
+      <div class="card use"><h3>Cloudflare Worker</h3>
+        <ul>
+          <li>Signing key <small>- approval links, dashboard login, tester codes</small></li>
+          <li>GitHub token <small>- adds labels, files issues, reads PRs</small></li>
+          <li>Passphrase <small>- your dashboard login</small></li>
+          <li>Triage AI key <small>- turns feedback into issues</small></li>
+          <li>Progress topic <small>- "Approved, starting"</small></li>
+          <li>Web-push key <small>- push notifications</small></li></ul></div>
+      <div class="card use"><h3>Fix workflow (in the app repo)</h3>
+        <ul>
+          <li>Anthropic key <small>- the AI agent writes the change</small></li>
+          <li>Signing key copy <small>- makes one-tap approval links</small></li>
+          <li>Both topics <small>- messages to your phone</small></li></ul></div>
+      <div class="card use"><h3>Your phone (ntfy app)</h3>
+        <ul><li>You subscribe to the two topic names <small>- that is how messages reach you</small></li></ul></div>
+    </div>
+  </section>
+
+  <section class="journeys">
+    <h2>Two keys, followed all the way</h2>
+    <div class="jr"><h3>The agent's Anthropic key (you copy it from a website)</h3>
+      <div class="chain">
+        <div class="step you"><b>YOU</b>Create it at console.anthropic.com</div>
+        <div class="step you"><b>YOU</b>Paste it into the command. Nothing shows. It is tested.</div>
+        <div class="step auto"><b>AUTOMATIC</b>Saved in the app repo's secrets</div>
+        <div class="step use2"><b>USED</b>The fix workflow reads it when you approve an issue</div>
+        <div class="step use2"><b>RESULT</b>The AI agent can write the change</div>
+      </div></div>
+    <div class="jr"><h3>The signing key (made for you)</h3>
+      <div class="chain">
+        <div class="step auto"><b>AUTOMATIC</b>The command makes a random key</div>
+        <div class="step auto"><b>AUTOMATIC</b>Saved in the harness repo, plus a copy in the app repo</div>
+        <div class="step auto"><b>AUTOMATIC</b>The deploy job copies it to Cloudflare</div>
+        <div class="step use2"><b>USED</b>The app makes approval links; the Worker checks them</div>
+        <div class="step use2"><b>RESULT</b>Both sides match, so one-tap approval works</div>
+      </div></div>
+  </section>
+
+  <section>
+    <h2>The only three commands you need</h2>
+    <div class="cmds" style="margin-top:12px">
+      <div class="cmd"><b>See everything</b><code>node scripts/secrets.mjs list</code><p>Every key, what it is for, whether it is set, and what needs attention.</p></div>
+      <div class="cmd"><b>Fill in what is missing</b><code>node scripts/secrets.mjs setup</code><p>Walks through the missing keys one at a time and explains each first.</p></div>
+      <div class="cmd"><b>Set or replace one</b><code>node scripts/secrets.mjs set &lt;name&gt;</code><p>For example the Anthropic key. Checked first, never printed.</p></div>
+    </div>
+  </section>
+</div>

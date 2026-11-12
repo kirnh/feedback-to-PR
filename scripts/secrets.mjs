@@ -207,16 +207,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (r.needsDeploy && !(await deployAndWait(manifest, sh, say))) process.exit(1);
   } else if (cmd === "setup") {
     const all = buildInventory(manifest, gatherFacts(manifest, sh), Date.now()).filter((r) => !r.derived && ["missing", "expired?", "legacy"].includes(r.status));
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    // A fresh reader per question: one left open would echo the hidden input and break it.
+    const askYesNo = async (q) => { const rl = createInterface({ input: process.stdin, output: process.stdout }); try { return /^y/i.test(await rl.question(q)); } finally { rl.close(); } };
     let changed = false;
     for (const r of all) {
-      if (!r.required && !/^y/i.test(await rl.question(`\nOptional: ${r.label}. ${r.what}\nSet it now? (y/N) `))) continue;
+      if (!r.required && !(await askYesNo(`\nOptional: ${r.label}. ${r.what}\nSet it now? (y/N) `))) continue;
       const res = await setSecret(manifest, r.id, { sh, ask: askHidden, hashPassphrase, say });
       console.log(res.message);
-      if (!res.ok) { rl.close(); process.exit(1); }
+      if (!res.ok) process.exit(1);
       changed = true;
     }
-    rl.close();
     if (!all.length) console.log("Every key is set. Run 'list' to see everything.");
     else if (changed) { await deployAndWait(manifest, sh, say); console.log("\nDone. Run 'node scripts/secrets.mjs list' to check."); }
   } else {
