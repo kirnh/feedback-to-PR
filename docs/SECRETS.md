@@ -15,7 +15,7 @@ Stored only as a GitHub secret of the harness repo.
 Lets GitHub deploy the Worker and copy the other keys to Cloudflare. It is the one key that cannot be copied for you.
 
 - **Used by:** The deploy-worker workflow (GitHub Actions)
-- **How to get it:** Cloudflare dashboard > My Profile > API Tokens > Create Token > use the template 'Edit Cloudflare Workers' > account: yours > Continue > Create. Copy the token once.
+- **How to get it:** Cloudflare dashboard > My Profile > API Tokens > Create Token > use the template 'Edit Cloudflare Workers' > account: yours > Continue > Create. Copy the token once, with the Copy button (an Account API token from Manage Account works too).
 - **Set it:** `node scripts/secrets.mjs set CLOUDFLARE_API_TOKEN`
 
 ## Cloudflare Worker keys

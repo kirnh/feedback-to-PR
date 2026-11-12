@@ -1,5 +1,5 @@
 export interface Secret { id: string; label: string; scope: "harness" | "worker" | "app"; required?: boolean; workerName?: string; derivedFrom?: string; alsoSetInApps?: string; what: string; usedBy: string[]; howToGet: string; recipe?: { kind: string; [k: string]: unknown }; expiresInDays?: number }
-export interface Manifest { harnessRepo: string; apps: string[]; worker: string; secrets: Secret[] }
+export interface Manifest { harnessRepo: string; cloudflareAccountId?: string; apps: string[]; worker: string; secrets: Secret[] }
 export interface Facts { harness: Array<{ name: string; updatedAt?: string }>; apps: Record<string, Array<{ name: string; updatedAt?: string }>>; worker: string[] | null }
 export interface Row { id: string; label: string; scope: string; required: boolean; derived: boolean; what: string; usedBy: string[]; status: string; note: string; updated: string | null }
 type Sh = (cmd: string, args: string[], opts?: { input?: string; cwd?: string }) => { code: number; stdout: string; stderr: string };

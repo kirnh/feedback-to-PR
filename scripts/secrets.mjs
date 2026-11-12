@@ -149,7 +149,7 @@ export async function setSecret(manifest, id, deps) {
   if (entry.derivedFrom) return { ok: false, message: `${id} is a copy. Set ${entry.derivedFrom} instead and it follows automatically.` };
 
   say(`\n${entry.label} (${id})\n  ${entry.what}\n  Used by: ${entry.usedBy.join("; ")}\n  How to get it: ${entry.howToGet}\n`);
-  const ctx = { apps: manifest.apps, fetch: deps.fetch, triageProvider: readTomlSetting(root, "TRIAGE_PROVIDER", "anthropic"), triageModel: readTomlSetting(root, "TRIAGE_MODEL", "claude-haiku-5-5"), agentModel: "claude-sonnet-5-5" };
+  const ctx = { apps: manifest.apps, cloudflareAccountId: manifest.cloudflareAccountId, fetch: deps.fetch, triageProvider: readTomlSetting(root, "TRIAGE_PROVIDER", "anthropic"), triageModel: readTomlSetting(root, "TRIAGE_MODEL", "claude-haiku-5-5"), agentModel: "claude-sonnet-5-5" };
   const made = await runRecipe(entry.recipe, { ask, ctx, hashPassphrase });
   if (made.error) return { ok: false, message: made.error };
 

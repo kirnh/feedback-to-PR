@@ -27,11 +27,26 @@ export const VALIDATORS = {
   },
 
   "cloudflare-token": async (v, ctx) => {
-    let res;
-    try { res = await (ctx.fetch ?? fetch)("https://api.cloudflare.com/client/v4/user/tokens/verify", { headers: { authorization: `Bearer ${v}` } }); }
-    catch { return "Could not reach Cloudflare to check the token."; }
-    const body = await res.json().catch(() => ({}));
-    return res.ok && body?.result?.status === "active" ? null : `Cloudflare rejected the token (${res.status}). Create it again from the 'Edit Cloudflare Workers' template.`;
+    const f = ctx.fetch ?? fetch;
+    const ask = async (url) => {
+      try {
+        const res = await f(url, { headers: { authorization: `Bearer ${v}` } });
+        const body = await res.json().catch(() => ({}));
+        return { status: res.status, active: res.ok && body?.result?.status === "active" };
+      } catch { return { status: 0, active: false }; }
+    };
+    // A personal token (My Profile > API Tokens) and an account token (Manage Account > Account API Tokens) are checked at different addresses.
+    const personal = await ask("https://api.cloudflare.com/client/v4/user/tokens/verify");
+    if (personal.active) return null;
+    const account = ctx.cloudflareAccountId ? await ask(`https://api.cloudflare.com/client/v4/accounts/${ctx.cloudflareAccountId}/tokens/verify`) : { status: 0, active: false };
+    if (account.active) return null;
+    if (personal.status === 0 && account.status === 0) return "Could not reach Cloudflare to check the token.";
+    // Say what looks wrong without revealing the value.
+    const shape = /^[0-9a-f]{37}$/.test(v) ? "That looks like the Global API Key, which is not an API token. Create a token from the 'Edit Cloudflare Workers' template instead."
+      : v.length !== 40 ? `What was entered is ${v.length} characters; a Cloudflare API token is exactly 40. Copy it again with the Copy button, in one go.`
+      : /[^A-Za-z0-9_-]/.test(v) ? "The value has characters a token never contains, so the paste was probably altered. Copy it again with the Copy button."
+      : "It has the right shape, so Cloudflare itself is refusing it. Check the token is Active and was made from the 'Edit Cloudflare Workers' template for the right account.";
+    return `Cloudflare rejected the token (${personal.status}${account.status ? `/${account.status}` : ""}). ${shape}`;
   },
 
   "github-token": async (v, ctx) => {

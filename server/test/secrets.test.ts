@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { storedPassphrase } from "../scripts/lib/passphrase-hash.mjs";
+import { cleanTyped } from "../../scripts/lib/ask-hidden.mjs";
 import { generateVapid, runRecipe, VALIDATORS } from "../../scripts/lib/recipes.mjs";
 import { buildInventory, loadManifest, renderDoc, renderInventory, setSecret, storesFor, type Facts, type Manifest } from "../../scripts/secrets.mjs";
 import { planSync, syncSecrets } from "../../scripts/sync-secrets.mjs";
@@ -96,10 +97,52 @@ describe("recipes", () => {
     expect(await VALIDATORS.anthropic("sk-ant-x", { fetch: respond(401, { error: { message: "invalid x-api-key" } }) })).toContain("HTTP 401");
     expect(await VALIDATORS.anthropic("sk-ant-x", { fetch: respond(200, {}) })).toBeNull();
     expect(await VALIDATORS["anthropic-triage"]("whatever", { triageProvider: "openai-compatible" })).toBeNull(); // other providers cannot be tested here
-    expect(await VALIDATORS["cloudflare-token"]("t", { fetch: respond(200, { result: { status: "active" } }) })).toBeNull();
-    expect(await VALIDATORS["cloudflare-token"]("t", { fetch: respond(401, {}) })).toContain("rejected");
+    const tok = "a".repeat(40);
+    expect(await VALIDATORS["cloudflare-token"](tok, { fetch: respond(200, { result: { status: "active" } }) })).toBeNull();
+    expect(await VALIDATORS["cloudflare-token"](tok, { fetch: respond(401, {}) })).toContain("rejected");
     expect(await VALIDATORS["github-token"]("t", { apps: ["o/r"], fetch: respond(200, []) })).toBeNull();
     expect(await VALIDATORS["github-token"]("t", { apps: ["o/r"], fetch: respond(404, {}) })).toContain("o/r");
+  });
+});
+
+describe("Cloudflare token check: both kinds, and a useful reason that never shows the value", () => {
+  const secret = "S3cretValueS3cretValueS3cretValue12345678".slice(0, 40);
+  const router = (map: Record<string, { status: number; active?: boolean }>) => (async (url: string) => {
+    const hit = Object.entries(map).find(([k]) => url.includes(k))?.[1] ?? { status: 401 };
+    return new Response(JSON.stringify({ result: { status: hit.active ? "active" : "disabled" } }), { status: hit.status });
+  }) as unknown as typeof fetch;
+  const ctx = (f: typeof fetch) => ({ fetch: f, cloudflareAccountId: "acct123" });
+
+  it("accepts a personal token", async () => expect(await VALIDATORS["cloudflare-token"](secret, ctx(router({ "/user/tokens/verify": { status: 200, active: true } })))).toBeNull());
+  it("accepts an account token (the personal check says 401, the account check says active)", async () =>
+    expect(await VALIDATORS["cloudflare-token"](secret, ctx(router({ "/user/tokens/verify": { status: 401 }, "/accounts/acct123/tokens/verify": { status: 200, active: true } })))).toBeNull());
+  it("refuses a disabled token even when the call succeeds", async () =>
+    expect(await VALIDATORS["cloudflare-token"](secret, ctx(router({ "/user/tokens/verify": { status: 200, active: false } })))).toContain("rejected"));
+  it.each([
+    ["the Global API Key", "0123456789abcdef0123456789abcdef01234", "Global API Key"],
+    ["a truncated paste", "abc", "3 characters"],
+    ["a too-long paste", "a".repeat(80), "80 characters"],
+    ["a paste with stray characters", "a".repeat(39) + "~", "altered"],
+    ["a well-formed but refused token", "a".repeat(40), "Cloudflare itself is refusing"],
+  ])("explains %s", async (_n, value, words) => {
+    const msg = (await VALIDATORS["cloudflare-token"](value, ctx(router({}))))!;
+    expect(msg).toContain(words);
+    expect(msg).not.toContain(value.length > 5 ? value : "\u0000");
+  });
+  it("says so when Cloudflare cannot be reached", async () => {
+    const down = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
+    expect(await VALIDATORS["cloudflare-token"](secret, ctx(down))).toContain("Could not reach");
+  });
+  it("the account id is defined once in the manifest and the deploy workflow agrees", () => {
+    expect(readFileSync(join(root, ".github/workflows/deploy-worker.yml"), "utf8")).toContain(`CLOUDFLARE_ACCOUNT_ID: ${(manifest as { cloudflareAccountId?: string }).cloudflareAccountId}`);
+  });
+});
+
+describe("hidden input: invisible paste markers cannot corrupt a key", () => {
+  it("strips bracketed-paste markers and control characters, keeps the key", () => {
+    expect(cleanTyped("\u001b[200~abc-DEF_123\u001b[201~")).toBe("abc-DEF_123");
+    expect(cleanTyped("ab\u0007c\u001b[Dd")).toBe("abcd");
+    expect(cleanTyped("plain")).toBe("plain");
   });
 });
 
