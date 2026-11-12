@@ -33,5 +33,8 @@ id = "781b6074f62f481a901c1b9e2ed46c91"
 #   SIGNING_KEY          shared HMAC key; also stored as the APPROVAL_SIGNING_KEY secret in the app repo
 #   GITHUB_TOKEN         fine-grained token, Issues read/write on the allowed repos
 #   NTFY_PROGRESS_TOPIC  ntfy topic for acknowledgements (optional)
-#   TRIAGE_LLM_KEY       API key for the triage model; set with: node scripts/set-triage-key.mjs
-#   VAPID_PRIVATE_JWK    web push signing key (push test only); create and store with: node scripts/set-vapid-secret.mjs
+#   TRIAGE_LLM_KEY       API key for the triage model
+#   VAPID_PRIVATE_JWK    web push signing key (push test only)
+# Do not set these by hand. Every key is kept in GitHub secrets and copied here by the deploy-worker workflow:
+#   node scripts/secrets.mjs list     (what exists, where, and what each is for)
+#   node scripts/secrets.mjs set <ID>

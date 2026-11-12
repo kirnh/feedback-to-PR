@@ -49,7 +49,7 @@ const names = (text) => {
  * Returns a flat list of { level: pass|warn|fail, title, detail?, fix? }.
  */
 export async function runDoctor({ repo, worker, remote = false }, deps) {
-  const { sh, fetchJson, readFile, fileExists, harnessDir } = deps;
+  const { sh, fetchJson, readFile, fileExists, harnessDir, manifest } = deps;
   const out = [];
   const gh = (...args) => sh("gh", args);
   const ghJson = (...args) => { const r = gh(...args); if (r.code !== 0) return null; try { return JSON.parse(r.stdout); } catch { return null; } };
@@ -69,14 +69,12 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
 
   // ---- Repo secrets -------------------------------------------------------
   const secretNames = (gh("secret", "list", "-R", repo, "--json", "name").stdout.match(/"name":"([^"]+)"/g) ?? []).map((s) => s.slice(8, -1));
-  const need = (name, level, why, fix) => {
-    if (secretNames.includes(name)) out.push(pass(`Repo secret ${name} is set`));
-    else out.push(level === "fail" ? fail(`Repo secret ${name} is missing`, why, fix) : warn(`Repo secret ${name} is missing`, why, fix));
-  };
-  need("ANTHROPIC_API_KEY", "fail", "The agent cannot run without it.", `gh secret set ANTHROPIC_API_KEY -R ${repo}`);
-  need("APPROVAL_SIGNING_KEY", "warn", "One-tap approval links cannot be made.", `gh secret set APPROVAL_SIGNING_KEY -R ${repo}   (same value as the Worker's SIGNING_KEY)`);
-  need("NTFY_TOPIC", "warn", "No phone notifications for approvals and results.", `gh secret set NTFY_TOPIC -R ${repo}`);
-  need("NTFY_PROGRESS_TOPIC", "warn", "No 'Done' progress messages.", `gh secret set NTFY_PROGRESS_TOPIC -R ${repo}`);
+  for (const s of manifest.secrets.filter((x) => x.scope === "app" && !x.quiet)) {
+    const why = s.what.split(". ")[0] + ".";
+    const fix = `node scripts/secrets.mjs set ${s.derivedFrom ?? s.id}`;
+    if (secretNames.includes(s.id)) out.push(pass(`Repo secret ${s.id} is set`));
+    else out.push((s.required ? fail : warn)(`Repo secret ${s.id} is missing`, why, fix));
+  }
 
   // ---- Labels -------------------------------------------------------------
   const labels = (ghJson("label", "list", "-R", repo, "--json", "name", "--limit", "200") ?? []).map((l) => l.name);
@@ -133,13 +131,12 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
       const have = sl.code === 0 ? names(sl.stdout) : null;
       if (!have) out.push(warn("Could not list Worker secrets", "wrangler is not installed or not logged in.", "cd server && npm install && npx wrangler login"));
       else {
-        for (const [n, level, why, fix] of [
-          ["SIGNING_KEY", "fail", "Approval links cannot be verified.", "Set it once, and set the same value as APPROVAL_SIGNING_KEY in the repo."],
-          ["GITHUB_TOKEN", "fail", "The Worker cannot act on issues.", "cd server && npx wrangler secret put GITHUB_TOKEN"],
-          ["DASHBOARD_PASS", "warn", "The dashboard cannot be signed into.", "cd server && node scripts/set-dashboard-passphrase.mjs"],
-          ["NTFY_PROGRESS_TOPIC", "warn", "'Approved, starting' acknowledgements are skipped.", "cd server && npx wrangler secret put NTFY_PROGRESS_TOPIC"],
-          ["TRIAGE_LLM_KEY", "warn", "Feedback from the app cannot be turned into issues.", "cd server && node scripts/set-triage-key.mjs"],
-        ]) have.includes(n) ? out.push(pass(`Worker secret ${n} is set`)) : out.push(level === "fail" ? fail(`Worker secret ${n} is missing`, why, fix) : warn(`Worker secret ${n} is missing`, why, fix));
+        for (const s of manifest.secrets.filter((x) => x.scope === "worker")) {
+          const why = s.what.split(". ")[0] + ".";
+          const fix = `node scripts/secrets.mjs set ${s.id}`;
+          if (have.includes(s.workerName)) out.push(pass(`Worker secret ${s.workerName} is set`));
+          else out.push((s.required ? fail : warn)(`Worker secret ${s.workerName} is missing`, why, fix));
+        }
       }
 
       // The state we hit once: a newer version uploaded but never made live.
@@ -157,7 +154,7 @@ export async function runDoctor({ repo, worker, remote = false }, deps) {
     }
   }
 
-  out.push({ level: "info", title: "Not checkable from here", detail: "The Worker's GitHub token (permissions and expiry): sign in to the dashboard; its Problems strip checks both." });
+  out.push({ level: "info", title: "Not checkable from here", detail: "The Worker's GitHub token (permissions and expiry): sign in to the dashboard; its Problems strip checks both. `node scripts/secrets.mjs list` also warns as it nears expiry." });
 
   // ---- Remote: the repo's own Anthropic key ------------------------------
   if (remote) {
@@ -211,7 +208,7 @@ function parseArgs(argv) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = parseArgs(process.argv.slice(2));
   if (!args.repo) { console.error("Usage: node scripts/doctor.mjs --repo owner/app [--worker https://...workers.dev] [--remote]"); process.exit(2); }
-  const results = await runDoctor(args, { sh: realSh, fetchJson: realFetchJson, readFile: (p) => readFileSync(p, "utf8"), fileExists: existsSync, harnessDir: ROOT });
+  const results = await runDoctor(args, { sh: realSh, fetchJson: realFetchJson, readFile: (p) => readFileSync(p, "utf8"), fileExists: existsSync, harnessDir: ROOT, manifest: JSON.parse(readFileSync(join(ROOT, "secrets.manifest.json"), "utf8")) });
   console.log(formatReport(results));
   process.exit(results.some((r) => r.level === "fail") ? 1 : 0);
 }

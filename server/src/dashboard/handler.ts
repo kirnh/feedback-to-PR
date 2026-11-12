@@ -12,7 +12,7 @@ export interface DashEnv {
   SIGNING_KEY: string;
   GITHUB_TOKEN: string;
   ALLOWED_REPOS: string;
-  /** Salted hash of the owner's passphrase (see scripts/set-dashboard-passphrase.mjs) */
+  /** Salted hash of the owner's passphrase (set with: node scripts/secrets.mjs set WORKER_DASHBOARD_PASS) */
   DASHBOARD_PASS?: string;
   /** JSON map of project id to { repo, name }; the apps that can receive feedback */
   PROJECTS?: string;

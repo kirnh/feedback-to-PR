@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { formatReport, runDoctor, type Result } from "../../scripts/doctor.mjs";
+import { loadManifest } from "../../scripts/secrets.mjs";
+
+const manifest = loadManifest(new URL("../../", import.meta.url).pathname);
+const appSecrets = manifest.secrets.filter((s) => s.scope === "app" && !(s as { quiet?: boolean }).quiet).map((s) => s.id);
+const workerSecrets = manifest.secrets.filter((s) => s.scope === "worker").map((s) => s.workerName!);
 
 const REPO = "owner/app";
 const WORKER = "https://w.example";
@@ -13,7 +18,7 @@ interface World {
 }
 const healthy = (): World => ({
   ghAuth: true, repoVisible: true,
-  secrets: ["ANTHROPIC_API_KEY", "APPROVAL_SIGNING_KEY", "NTFY_TOPIC", "NTFY_PROGRESS_TOPIC"],
+  secrets: appSecrets,
   labels: ["bug", "ai-fix", "ai-triaged"],
   files: {
     ".github/workflows/ai-fix.yml": 'name: AI fix\nrun-name: "AI fix #${{ github.event.issue.number }}"\n',
@@ -21,7 +26,7 @@ const healthy = (): World => ({
     "harness.config.yml": CONFIG,
   },
   canOpenPrs: true, protectedBranch: true,
-  workerSecrets: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS", "NTFY_PROGRESS_TOPIC", "TRIAGE_LLM_KEY"],
+  workerSecrets,
   newestVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", liveVersion: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   toml: 'ALLOWED_REPOS = "owner/app, other/repo"', health: 200, dashboard: 401,
 });
@@ -31,6 +36,7 @@ function deps(w: World) {
   const no = () => ({ code: 1, stdout: "", stderr: "x" });
   return {
     harnessDir: "/h",
+    manifest,
     readFile: () => w.toml,
     fileExists: () => true,
     fetchJson: async (url: string) => (url.endsWith("/v1/health") ? { status: w.health, json: {} } : { status: w.dashboard, json: {} }),
@@ -79,7 +85,7 @@ describe("doctor", () => {
 
   it("a missing Anthropic key is a failure with the exact command; missing phone secrets are only warnings", async () => {
     const r = await run({ ...healthy(), secrets: [] });
-    expect(find(r, "ANTHROPIC_API_KEY")).toMatchObject({ level: "fail", fix: "gh secret set ANTHROPIC_API_KEY -R owner/app" });
+    expect(find(r, "ANTHROPIC_API_KEY")).toMatchObject({ level: "fail", fix: "node scripts/secrets.mjs set ANTHROPIC_API_KEY" });
     expect(find(r, "NTFY_TOPIC")?.level).toBe("warn");
     expect(find(r, "APPROVAL_SIGNING_KEY")?.level).toBe("warn");
   });
@@ -152,15 +158,16 @@ describe("doctor", () => {
 
   it("reports missing Worker secrets: required ones fail, the dashboard passphrase warns", async () => {
     const r = await run({ ...healthy(), workerSecrets: ["SIGNING_KEY"] });
+    expect(r).toBeTruthy();
     expect(find(r, "GITHUB_TOKEN")?.level).toBe("fail");
     expect(find(r, "DASHBOARD_PASS")?.level).toBe("warn");
-    expect(find(r, "DASHBOARD_PASS")?.fix).toContain("set-dashboard-passphrase");
+    expect(find(r, "DASHBOARD_PASS")?.fix).toBe("node scripts/secrets.mjs set WORKER_DASHBOARD_PASS");
     expect(find(r, "SIGNING_KEY")?.level).toBe("pass");
   });
 
   it("warns when intake has no triage key, with the one-command fix", async () => {
-    const r = find(await run({ ...healthy(), workerSecrets: ["SIGNING_KEY", "GITHUB_TOKEN", "DASHBOARD_PASS", "NTFY_PROGRESS_TOPIC"] }), "TRIAGE_LLM_KEY");
-    expect(r).toMatchObject({ level: "warn", fix: "cd server && node scripts/set-triage-key.mjs" });
+    const r = find(await run({ ...healthy(), workerSecrets: workerSecrets.filter((n) => n !== "TRIAGE_LLM_KEY") }), "TRIAGE_LLM_KEY");
+    expect(r).toMatchObject({ level: "warn", fix: "node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY" });
   });
 
   it("catches a Worker version that was uploaded but never made live", async () => {
@@ -190,7 +197,7 @@ describe("formatReport", () => {
   it("prints each problem with its fix and a summary line", async () => {
     const text = formatReport(await run({ ...healthy(), secrets: [], labels: [] }));
     expect(text).toContain("FAIL  Repo secret ANTHROPIC_API_KEY is missing");
-    expect(text).toContain("fix: gh secret set ANTHROPIC_API_KEY -R owner/app");
+    expect(text).toContain("fix: node scripts/secrets.mjs set ANTHROPIC_API_KEY");
     expect(text).toMatch(/\d+ passed, \d+ warnings, \d+ failed\./);
   });
 });

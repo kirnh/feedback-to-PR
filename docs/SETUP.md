@@ -95,20 +95,22 @@ Edit `server/wrangler.toml`:
 - `[[kv_namespaces]] id` → your KV id
 - `VAPID_SUBJECT` in `src/push.ts` only matters for the push test; ignore otherwise
 
-Create the GitHub token: *Settings → Developer settings → Fine-grained tokens*, resource owner = the owner of the app repos, repositories = only the allowed ones, permission **Issues: Read and write**, nothing else.
-
-Set secrets and deploy:
+Deploy once by hand, then let GitHub do it from now on:
 ```bash
-SIGNING_KEY=$(openssl rand -hex 32); echo "$SIGNING_KEY"   # keep this value for C3
-echo "$SIGNING_KEY"                | npx wrangler secret put SIGNING_KEY
-npx wrangler secret put GITHUB_TOKEN          # paste the fine-grained token
-npx wrangler secret put NTFY_PROGRESS_TOPIC   # the progress topic
 npx wrangler deploy
 curl https://feedback-to-pr.<subdomain>.workers.dev/v1/health    # {"ok":true}
 ```
 
+**Keys: one place, one command.** Every key lives in GitHub secrets, is described in [SECRETS.md](SECRETS.md), and is set with one command that asks only for what it must, checks it before storing it, and never prints it:
+```bash
+node scripts/secrets.mjs list     # what exists, where it is used, what needs attention
+node scripts/secrets.mjs setup    # walks through everything missing, one key at a time
+node scripts/secrets.mjs set <ID> # set or replace one key
+```
+Start with `CLOUDFLARE_API_TOKEN` (the one key that cannot be copied for you). After that, the `deploy-worker` workflow in the harness repo deploys the Worker and copies the Worker's keys from GitHub to Cloudflare on every change, so you never run `wrangler secret put` or `wrangler deploy` by hand.
+
 ### C3. Wire the app repo
-Add repo secrets: `NTFY_TOPIC` (needs-you topic), `NTFY_PROGRESS_TOPIC`, and `APPROVAL_SIGNING_KEY` (the exact `SIGNING_KEY` value). In `.github/workflows/ai-approval-notify.yml` set `worker_url` to your Worker URL.
+The repo secrets (`ANTHROPIC_API_KEY`, `NTFY_TOPIC`, and the copies `APPROVAL_SIGNING_KEY` and `NTFY_PROGRESS_TOPIC`) are set by `secrets.mjs`; the copies follow their source automatically. In `.github/workflows/ai-approval-notify.yml` set `worker_url` to your Worker URL.
 
 ### C4. Test the loop
 1. Open an issue and add `ai-triaged`.
@@ -118,12 +120,12 @@ Add repo secrets: `NTFY_TOPIC` (needs-you topic), `NTFY_PROGRESS_TOPIC`, and `AP
 
 ### C5. Dashboard (optional)
 1. Edit the Worker's fine-grained token (GitHub → Settings → Developer settings → Fine-grained tokens) and add **Pull requests: Read** and **Actions: Read**. No new token or secret is needed.
-2. Choose a passphrase: `cd server && node scripts/set-dashboard-passphrase.mjs`. You type it twice (hidden); only a salted hash is stored, and the script signs in once to prove it works.
+2. Choose a passphrase: `node scripts/secrets.mjs set WORKER_DASHBOARD_PASS`. You type it twice (hidden); only a salted hash is stored.
 3. Open `https://<worker>/app/`. In each app repo's `ai-fix.yml`, the run must be named `AI fix #<issue number>` (`run-name: "AI fix #${{ github.event.issue.number }}"`, already in the template; the quotes matter, because YAML reads an unquoted ` #` as the start of a comment) so the dashboard can link runs to issues.
 
 ### C6. Feedback intake (optional)
 1. List the app in `PROJECTS` and `ALLOWED_REPOS` in `server/wrangler.toml`, then `cd server && npx wrangler deploy`.
-2. Store the triage model's API key: `cd server && node scripts/set-triage-key.mjs` (typed hidden; tested before it is stored). The model and provider are settings in `wrangler.toml`; a cheap model is the default.
+2. Store the triage model's API key: `node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY` (typed hidden; tested before it is stored). The model and provider are settings in `wrangler.toml`; a cheap model is the default.
 3. On the dashboard, use **Invite a tester** to make a beta code for each person. They enter it once in the app's feedback section.
 4. Check the whole path: `node scripts/send-test-feedback.mjs` (paste a code when asked). It sends one message, waits for triage, and reports the result. It creates a real `ai-triaged` issue, so your phone shows the approval request; close the issue afterwards.
 
@@ -153,7 +155,7 @@ It reads only, never prints a secret, and prints the exact fix under each proble
 
 To replace a rejected API key safely (the key is typed hidden, tested against the API first, and stored only if it works):
 ```bash
-node scripts/set-anthropic-key.mjs --repo OWNER/app
+node scripts/secrets.mjs set ANTHROPIC_API_KEY
 ```
 
 ## Troubleshooting
@@ -163,7 +165,7 @@ node scripts/set-anthropic-key.mjs --repo OWNER/app
 | Labeling `ai-fix` does nothing | Workflow files are not on the default branch, or `OWNER` in `uses:` is wrong, or a private harness lacks Actions access |
 | `harness.config.yml missing` | Config must be at the app repo root on the branch checked out |
 | PR creation fails | Enable "Allow GitHub Actions to create and approve pull requests" |
-| Run fails in the first seconds with `Anthropic API check failed (HTTP 401)` | The repo's `ANTHROPIC_API_KEY` is rejected. Run `node scripts/set-anthropic-key.mjs --repo OWNER/app` |
+| Run fails in the first seconds with `Anthropic API check failed (HTTP 401)` | The repo's `ANTHROPIC_API_KEY` is rejected. Run `node scripts/secrets.mjs set ANTHROPIC_API_KEY` |
 | `Anthropic API check failed (HTTP 400)` mentioning credit | The Anthropic account has no credit. Add credit in the Anthropic console |
 | Agent step fails immediately (older runs) | Missing or wrong `ANTHROPIC_API_KEY`; the failure reason is now recorded in the trace and shown on the dashboard |
 | "finished without changing any files" | Issue too vague, or needs a product decision (the prompt tells the agent to stop and ask) |

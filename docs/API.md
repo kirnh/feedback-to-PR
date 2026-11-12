@@ -151,6 +151,8 @@ Both must exist in the app repo (create them once).
 
 ## 5. Secrets and variables
 
+The full, current description of every key (what it is, where it is used, how to get it) is [SECRETS.md](SECRETS.md), generated from `secrets.manifest.json`. Keys are kept in GitHub secrets and set with `node scripts/secrets.mjs set <ID>`; the `deploy-worker` workflow copies the Worker's keys to Cloudflare. The table below is a summary.
+
 | Where | Name | Purpose |
 |---|---|---|
 | App repo secret | `ANTHROPIC_API_KEY` (or other provider key) | Agent |
@@ -161,9 +163,9 @@ Both must exist in the app repo (create them once).
 | Worker secret | `SIGNING_KEY` | Verifies links |
 | Worker secret | `GITHUB_TOKEN` | Fine-grained PAT on allowed repos only: **Issues: read and write** (approvals), plus **Pull requests: read** and **Actions: read** (dashboard) |
 | Worker secret | `NTFY_PROGRESS_TOPIC` | Optional; acknowledgements are skipped without it |
-| Worker secret | `DASHBOARD_PASS` | Salted hash of the dashboard passphrase. Set with `node server/scripts/set-dashboard-passphrase.mjs` (typed hidden, verified by a test sign-in) |
-| Worker secret | `TRIAGE_LLM_KEY` | API key for the triage model. Set with `node server/scripts/set-triage-key.mjs` (tested first when the provider is Anthropic) |
-| Worker secret | `VAPID_PRIVATE_JWK` | Push test only. Create and store in one step with `node server/scripts/set-vapid-secret.mjs` (never goes through the clipboard) |
+| Worker secret | `DASHBOARD_PASS` | Salted hash of the dashboard passphrase. Set with `node scripts/secrets.mjs set WORKER_DASHBOARD_PASS` (typed hidden) |
+| Worker secret | `TRIAGE_LLM_KEY` | API key for the triage model. Set with `node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY` (tested first when the provider is Anthropic) |
+| Worker secret | `VAPID_PRIVATE_JWK` | Push test only. Generated and stored with `node scripts/secrets.mjs set WORKER_VAPID_PRIVATE_JWK` (never goes through the clipboard) |
 | Worker var | `ALLOWED_REPOS` | Comma-separated `owner/repo` allowlist (in `wrangler.toml`) |
 | Worker var | `NTFY_SERVER` | Optional, default `https://ntfy.sh` |
 | Worker binding | `USED` (KV) | Single-use link records |

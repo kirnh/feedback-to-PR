@@ -11,6 +11,7 @@ app feedback box -> triage (Claude) -> GitHub issue -> you add `ai-fix` -> fix a
 - [**Integration plan**](docs/PLAN-integration.md): one-step install, in-app feedback section, before/after clips, micro-release changelog (proposal)
 - [System design](docs/ARCHITECTURE.md): components, lifecycle, approval service, security model
 - [API and integration reference](docs/API.md): Worker endpoints, reusable workflows, config, secrets, labels
+- [Keys and secrets](docs/SECRETS.md): every key, what it is for, where it is used, how to set it (generated)
 - [Setup guide](docs/SETUP.md): connect any app repo, deploy the Worker, troubleshooting
 
 ## Layers

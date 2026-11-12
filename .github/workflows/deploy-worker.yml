@@ -1,0 +1,71 @@
+# Deploys the Worker and copies the harness repo's GitHub secrets to Cloudflare.
+# GitHub is the one place keys are kept; this job is the bridge, because the Worker cannot read GitHub secrets itself.
+# Run by hand from the Actions tab, or automatically when the Worker code or the key list changes.
+# Until CLOUDFLARE_API_TOKEN is set it does nothing (and says so), so deploying by hand still works.
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", "secrets.manifest.json", "scripts/sync-secrets.mjs", ".github/workflows/deploy-worker.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: b71ebb929f05de0cf8ff86ebfbe8cd97 # an id, not a secret
+      ALL_SECRETS: ${{ toJSON(secrets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the deploy token is present
+        id: gate
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice title=Deploy skipped::CLOUDFLARE_API_TOKEN is not set in this repo's secrets. Set it with: node scripts/secrets.mjs set CLOUDFLARE_API_TOKEN"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+
+      - name: Install, type-check and test (nothing deploys if these fail)
+        if: steps.gate.outputs.run == 'true'
+        working-directory: server
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Deploy
+        if: steps.gate.outputs.run == 'true'
+        working-directory: server
+        run: npx wrangler deploy
+
+      - name: Copy keys from GitHub to Cloudflare
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/sync-secrets.mjs
+
+      - name: Check the Worker answers
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          for i in 1 2 3 4 5 6; do
+            curl -fsS https://feedback-to-pr.feedback-to-pr-server.workers.dev/v1/health && exit 0
+            sleep 5
+          done
+          echo "::error::The Worker did not answer after the deploy."
+          exit 1

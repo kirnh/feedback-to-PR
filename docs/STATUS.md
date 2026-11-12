@@ -62,7 +62,7 @@ Secret **names** (values are never written anywhere in the repo):
 
 ## 4. Known issues and open items
 
-1. **The repo's `ANTHROPIC_API_KEY` is rejected by Anthropic (HTTP 401, `invalid x-api-key`).** Found with `doctor --remote`. This is what failed run 42960507640 (issue #3): 199 ms, 1 turn, $0, no model used. Every fix run will fail until the key is replaced with `node scripts/set-anthropic-key.mjs --repo kirnh/MediSync`. Runs now fail in seconds at a preflight and say this on the issue, on the phone and on the dashboard.
+1. **The repo's `ANTHROPIC_API_KEY` is rejected by Anthropic (HTTP 401, `invalid x-api-key`).** Found with `doctor --remote`. This is what failed run 42960507640 (issue #3): 199 ms, 1 turn, $0, no model used. Every fix run will fail until the key is replaced with `node scripts/secrets.mjs set ANTHROPIC_API_KEY`. Runs now fail in seconds at a preflight and say this on the issue, on the phone and on the dashboard.
 2. **Acknowledgements are skipped** until `NTFY_PROGRESS_TOPIC` is set (on both the Worker and the fork).
 3. **Guardrails are advisory** on the fork until branch protection requires the `AI guardrails` check.
 4. **Engine changes reach every app immediately** (`harness_ref` defaults to `main`). Pin a tag once stable.
@@ -97,7 +97,7 @@ Setup and verification must not depend on the owner experimenting.
 
 ## 7. Added after the milestone tag
 
-The read-only dashboard (`server/src/dashboard/`, page at `/app/`), an approval event log that feeds its problems strip, the exact trace embedded in each issue comment, a run name (`AI fix #<n>`) that links runs to issues, and `set-dashboard-passphrase.mjs`. **To switch it on:** add `Pull requests: Read` and `Actions: Read` to the Worker's GitHub token, then run `node scripts/set-dashboard-passphrase.mjs` in `server/`.
+The read-only dashboard (`server/src/dashboard/`, page at `/app/`), an approval event log that feeds its problems strip, the exact trace embedded in each issue comment, a run name (`AI fix #<n>`) that links runs to issues, and a sign-in passphrase. **To switch it on:** add `Pull requests: Read` and `Actions: Read` to the Worker's GitHub token, then set the passphrase with `node scripts/secrets.mjs set WORKER_DASHBOARD_PASS`.
 
 ## 7b. M1 result (11 November, after the tag)
 
@@ -106,15 +106,19 @@ The read-only dashboard (`server/src/dashboard/`, page at `/app/`), an approval 
 | Every failure names its cause | **Proven live.** Issue #3 re-run: the preflight failed in seconds with `HTTP 401: invalid x-api-key`; install, checks and agent were skipped; the reason is in the issue's trace comment, in the trace JSON, in the phone message and on the dashboard card |
 | `doctor` | **Built and run against the real setup** (18 pass, 4 warnings, 0 fail before the remote check). `--remote` found the rejected API key |
 | Dashboard shows real data | **Logic verified against the real repo** (issue #3 Failed, issue #1 Rejected, no false problems). **Not yet viewed signed in**: needs the passphrase and two token permissions |
-| Safe key replacement | `scripts/set-anthropic-key.mjs`: typed hidden, tested against the API, stored only if it works |
+| Safe key replacement | `scripts/secrets.mjs set <ID>`: typed hidden, tested against the API, stored only if it works |
 
 Bugs found by running it for real, now fixed and covered by tests: an unquoted `run-name` was silently cut at the `#` by YAML (runs were not linked to issues); a check that never ran was shown as `fail` instead of `n/a`.
 
-**Still needs the owner:** replace the rejected `ANTHROPIC_API_KEY`; add `Pull requests: Read` and `Actions: Read` to the Worker token; run `set-dashboard-passphrase.mjs`.
+**Still needs the owner:** replace the rejected `ANTHROPIC_API_KEY`; add `Pull requests: Read` and `Actions: Read` to the Worker token; set the dashboard passphrase with `node scripts/secrets.mjs set WORKER_DASHBOARD_PASS`.
 
 ## 7c. M2 (11 November, after the tag)
 
-Intake and triage are built: spec in `spec/openapi.yaml`, code in `server/src/feedback/`, owner-side beta codes with an "Invite a tester" form on the dashboard. **To run it for real:** `cd server && node scripts/set-triage-key.mjs`, make a code on the dashboard, then `node scripts/send-test-feedback.mjs`.
+Intake and triage are built: spec in `spec/openapi.yaml`, code in `server/src/feedback/`, owner-side beta codes with an "Invite a tester" form on the dashboard. **To run it for real:** `node scripts/secrets.mjs set WORKER_TRIAGE_LLM_KEY`, make a code on the dashboard, then `node scripts/send-test-feedback.mjs`.
+
+## 7d. Keys in one place (12 November, after the tag)
+
+Every key is now described in one list (`secrets.manifest.json`, rendered as [SECRETS.md](SECRETS.md)) and set with one command (`node scripts/secrets.mjs set <ID>`; `list` shows what exists and what needs attention; `setup` walks through what is missing). Keys live in GitHub secrets; the `deploy-worker` workflow deploys the Worker and copies its keys to Cloudflare, copying only keys that exist so it can never blank a working one. It stays dormant until `CLOUDFLARE_API_TOKEN` is set. The four older one-off key scripts were removed, and `doctor` reads the same list. Existing Cloudflare keys keep working until each is set again through GitHub (`list` marks them "legacy").
 
 ## 8. Quality gate at this milestone
 
