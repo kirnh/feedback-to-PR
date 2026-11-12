@@ -24,7 +24,13 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: b71ebb929f05de0cf8ff86ebfbe8cd97 # an id, not a secret
-      ALL_SECRETS: ${{ toJSON(secrets) }}
+      # One line per key kept in GitHub for the Worker. A test keeps this list in step with secrets.manifest.json.
+      WORKER_SIGNING_KEY: ${{ secrets.WORKER_SIGNING_KEY }}
+      WORKER_GITHUB_TOKEN: ${{ secrets.WORKER_GITHUB_TOKEN }}
+      WORKER_DASHBOARD_PASS: ${{ secrets.WORKER_DASHBOARD_PASS }}
+      WORKER_TRIAGE_LLM_KEY: ${{ secrets.WORKER_TRIAGE_LLM_KEY }}
+      WORKER_NTFY_PROGRESS_TOPIC: ${{ secrets.WORKER_NTFY_PROGRESS_TOPIC }}
+      WORKER_VAPID_PRIVATE_JWK: ${{ secrets.WORKER_VAPID_PRIVATE_JWK }}
     steps:
       - uses: actions/checkout@v4
 

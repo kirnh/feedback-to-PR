@@ -2,7 +2,7 @@
 // Runs inside the deploy workflow: copy the harness repo's GitHub secrets to the Cloudflare Worker.
 // Safety rules: a key is copied only if it exists and is not empty (so a missing key can never blank a working one),
 // and only key NAMES are ever printed.
-//   env: ALL_SECRETS  JSON of the repo's secrets (from ${{ toJSON(secrets) }}), CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+//   env: one variable per key (named as in secrets.manifest.json, set by the workflow), CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -31,8 +31,7 @@ export async function syncSecrets({ manifest, allSecrets, put }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const manifest = JSON.parse(readFileSync(join(root, "secrets.manifest.json"), "utf8"));
-  let allSecrets;
-  try { allSecrets = JSON.parse(process.env.ALL_SECRETS ?? "{}"); } catch { console.error("ALL_SECRETS is not valid JSON."); process.exit(1); }
+  const allSecrets = Object.fromEntries(manifest.secrets.filter((s) => s.scope === "worker").map((s) => [s.id, process.env[s.id] ?? ""]));
 
   const put = (name, value) => spawnSync("npx", ["--no-install", "wrangler", "secret", "put", name], { input: value, cwd: join(root, "server"), stdio: ["pipe", "ignore", "inherit"] }).status === 0;
   const r = await syncSecrets({ manifest, allSecrets, put });

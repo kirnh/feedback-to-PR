@@ -51,6 +51,11 @@ describe("secrets.manifest.json stays honest", () => {
     const aider = new Set(["OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY"]);
     for (const name of used) expect(known.has(name) || aider.has(name), `${name} is used by a template but not in secrets.manifest.json`).toBe(true);
   });
+  it("the deploy workflow passes every Worker key by name, and only those", () => {
+    const wf = readFileSync(join(root, ".github/workflows/deploy-worker.yml"), "utf8");
+    const passed = [...wf.matchAll(/^\s{6}([A-Z][A-Z0-9_]*): \$\{\{ secrets\.([A-Z][A-Z0-9_]*) \}\}/gm)].map((m) => m[2]).filter((n) => n !== "CLOUDFLARE_API_TOKEN").sort();
+    expect(passed).toEqual(manifest.secrets.filter((s) => s.scope === "worker").map((s) => s.id).sort());
+  });
   it("docs/SECRETS.md is the current output of the manifest", () => {
     expect(readFileSync(join(root, "docs/SECRETS.md"), "utf8")).toBe(renderDoc(manifest));
   });
