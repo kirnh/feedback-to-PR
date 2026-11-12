@@ -1,0 +1,47 @@
+<title>Feedback Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: swimlanes, one per place a step happens, time runs left to right. Dot color = how far each step has been proven. */
+:root{--bg:#f3f5f3;--surface:#fff;--fg:#14201f;--muted:#5a6967;--line:#d6dddb;--lane:#eef1ef;--ok:#17704a;--ok-bg:#e0f3e8;--warn:#a15c07;--warn-bg:#fdf0dc;--gate:#1d5fa8;--gate-bg:#e3eefb;
+--display:'Bricolage Grotesque','Segoe UI',sans-serif;--body:'Instrument Sans','Segoe UI',system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2f403d;--lane:#131d1c;--ok:#6fd3a0;--ok-bg:#10291e;--warn:#f0b062;--warn-bg:#2d2113;--gate:#7db6f2;--gate-bg:#12253a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1514;--surface:#162120;--fg:#e8efed;--muted:#9bacaa;--line:#2f403d;--lane:#131d1c;--ok:#6fd3a0;--ok-bg:#10291e;--warn:#f0b062;--warn-bg:#2d2113;--gate:#7db6f2;--gate-bg:#12253a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h1{font-family:var(--display);font-size:clamp(26px,5vw,36px);line-height:1.15;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.lede{color:var(--muted);margin:8px 0 0;max-width:62ch}
+figure{margin:0;display:flex;flex-direction:column;gap:10px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+svg{display:block;min-width:760px;width:100%;height:auto;color:var(--fg)}
+figcaption{color:var(--muted);font-size:13.5px;max-width:70ch}
+.lane{fill:var(--surface)}.lane.alt{fill:var(--lane)}
+.ln{font:600 10px var(--body);letter-spacing:.07em;fill:var(--muted)}
+.box{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.box.gate{fill:var(--gate-bg);stroke:var(--gate);stroke-width:2}
+.box.plan{fill:none;stroke:var(--muted);stroke-dasharray:5 4}
+.dot.ok{fill:var(--ok)}.dot.warn{fill:var(--warn)}
+.t1{font:600 12.5px var(--body);fill:var(--fg)}.t2{font:11.5px var(--body);fill:var(--muted)}
+.arr{fill:none;stroke:var(--fg);stroke-width:1.6}.arr.dash{stroke:var(--muted);stroke-dasharray:5 4}
+.lbl{font:11.5px var(--body);fill:var(--fg)}
+.key{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13.5px}
+.key span{display:inline-flex;align-items:center;gap:8px}.key i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.key .ok{background:var(--ok)}.key .warn{background:var(--warn)}.key .gate{border-radius:3px;border:2px solid var(--gate);background:var(--gate-bg)}.key .plan{border-radius:3px;border:2px dashed var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.cols div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.cols h2{font:600 14px var(--display);margin:0 0 6px}.cols p{margin:0;font-size:14px;color:var(--muted)}
+</style>
+<div class="wrap">
+<header><h1>How a note becomes a merged change</h1>
+<p class="lede">Two taps from you, both in the GitHub app. Everything else runs on its own.</p></header>
+<figure>
+<div class="scroll"><svg viewBox="0 0 970 440" role="img" aria-label="Swimlane flow: feedback from the app goes to the Worker, which files a GitHub issue. The owner adds the label ai-fix, GitHub Actions drafts a pull request, and the owner reviews and merges it. A before and after clip is planned."><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs><rect class="lane" x="0" y="10" width="970" height="84"/><text class="ln" x="10" y="26">IN THE APP</text><rect class="lane alt" x="0" y="94" width="970" height="84"/><text class="ln" x="10" y="110">WORKER (Cloudflare)</text><rect class="lane" x="0" y="178" width="970" height="84"/><text class="ln" x="10" y="194">GITHUB</text><rect class="lane alt" x="0" y="262" width="970" height="84"/><text class="ln" x="10" y="278">YOU (phone)</text><rect class="lane" x="0" y="346" width="970" height="84"/><text class="ln" x="10" y="362">GITHUB ACTIONS</text><rect class="box plan" x="20" y="40" width="140" height="44" rx="6"/><text class="t1" x="90.0" y="59" text-anchor="middle">Feedback box</text><text class="t2" x="90.0" y="75" text-anchor="middle">text in, send</text><rect class="box warn" x="190" y="124" width="140" height="44" rx="6"/><circle class="dot warn" cx="202" cy="136" r="4.5"/><text class="t1" x="264.0" y="143" text-anchor="middle">Triage AI</text><text class="t2" x="260.0" y="159" text-anchor="middle">rewrite, dedupe</text><rect class="box warn" x="360" y="208" width="140" height="44" rx="6"/><circle class="dot warn" cx="372" cy="220" r="4.5"/><text class="t1" x="434.0" y="227" text-anchor="middle">Issue</text><text class="t2" x="430.0" y="243" text-anchor="middle">label ai-triaged</text><rect class="box warn gate" x="530" y="292" width="140" height="44" rx="6"/><circle class="dot warn" cx="542" cy="304" r="4.5"/><text class="t1" x="604.0" y="311" text-anchor="middle">Approval 1</text><text class="t2" x="600.0" y="327" text-anchor="middle">add label ai-fix</text><rect class="box ok" x="530" y="376" width="140" height="44" rx="6"/><circle class="dot ok" cx="542" cy="388" r="4.5"/><text class="t1" x="604.0" y="395" text-anchor="middle">Agent drafts fix</text><text class="t2" x="600.0" y="411" text-anchor="middle">branch, checks, PR</text><rect class="box ok" x="760" y="208" width="140" height="44" rx="6"/><circle class="dot ok" cx="772" cy="220" r="4.5"/><text class="t1" x="834.0" y="227" text-anchor="middle">Draft PR</text><text class="t2" x="830.0" y="243" text-anchor="middle">checks + trace</text><rect class="box ok gate" x="760" y="292" width="140" height="44" rx="6"/><circle class="dot ok" cx="772" cy="304" r="4.5"/><text class="t1" x="834.0" y="311" text-anchor="middle">Approval 2</text><text class="t2" x="830.0" y="327" text-anchor="middle">review, merge</text><rect class="box plan" x="760" y="376" width="140" height="44" rx="6"/><text class="t1" x="830.0" y="395" text-anchor="middle">Before/after clip</text><text class="t2" x="830.0" y="411" text-anchor="middle">side by side</text><path class="arr" d="M160,62 L260,62 L260,124" marker-end="url(#ah)"/><text class="lbl" x="166" y="55" text-anchor="start">POST /v1/feedback</text><path class="arr" d="M330,146 L430,146 L430,208" marker-end="url(#ah)"/><text class="lbl" x="336" y="139" text-anchor="start">files issue</text><path class="arr" d="M430,252 L430,314 L530,314" marker-end="url(#ah)"/><text class="lbl" x="438" y="284" text-anchor="start">bot @mentions you</text><path class="arr" d="M600,336 L600,376" marker-end="url(#ah)"/><text class="lbl" x="608" y="358" text-anchor="start">label ai-fix</text><path class="arr" d="M670,398 L715,398 L715,230 L760,230" marker-end="url(#ah)"/><text class="lbl" x="709" y="225" text-anchor="end">opens draft PR</text><path class="arr" d="M830,252 L830,292" marker-end="url(#ah)"/><text class="lbl" x="838" y="269" text-anchor="start">review</text><path class="arr dash" d="M670,398 L760,398" marker-end="url(#ah)"/><path class="arr dash" d="M900,398 L940,398 L940,230 L900,230" marker-end="url(#ah)"/><text class="lbl" x="954" y="314" text-anchor="middle" transform="rotate(-90 954 314)">attached to PR</text></svg></div>
+<figcaption>Time runs left to right. Nothing in the Actions lane starts until you add the label in the You lane. The PR is always a draft until you merge it.</figcaption>
+</figure>
+<div class="key"><span><i class="ok"></i>Proven live</span><span><i class="warn"></i>Built, not run live yet</span><span><i class="gate"></i>Your tap</span><span><i class="plan"></i>Not built</span></div>
+<div class="cols">
+<div><h2>Tap 1: approve</h2><p>GitHub notifies you that feedback is ready. Open the issue and add the label <b>ai-fix</b>. Close it instead to reject.</p></div>
+<div><h2>Tap 2: merge</h2><p>GitHub notifies you with the draft PR and the check result. Review it, then merge, or comment what to change.</p></div>
+<div><h2>Next to prove</h2><p>Run the test message through the whole path once. The triage AI and the label step have not run live yet.</p></div>
+</div>
+</div>
